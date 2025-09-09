@@ -1,0 +1,39 @@
+image: node:20
+
+pipelines:
+  branches:
+    main: # Only runs for main branch
+      - step:
+          name: Build & Deploy to Production
+          caches:
+            - node
+          script:
+            # 0) Clean NPM cache
+            - npm cache clean --force
+
+            # 1) Install dependencies
+            - npm ci
+
+            # 2) Build the app
+            - npm run build
+
+            # 3) Keep only production dependencies
+            - npm prune --omit=dev
+
+            # 4) Verify build output
+            - ls -la .next
+
+            # 5) Package runtime bits
+            - zip -r release.zip .next public package.json package-lock.json next.config.*
+
+            # 6) Set deployment variables
+            - |
+              echo "Deploying main branch to Production Web App"
+              DEPLOY_NAME=$AZURE_WEBAPP_NAME
+              DEPLOY_USER=$DEPLOY_USER
+              DEPLOY_PWD=$DEPLOY_PWD
+
+            # 7) Deploy via Kudu Zip Deploy
+            - curl -X POST -L -u $DEPLOY_USER:$DEPLOY_PWD \
+              "https://${DEPLOY_NAME}.scm.azurewebsites.net/api/zipdeploy" \
+              --data-binary @release.zip
