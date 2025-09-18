@@ -2,7 +2,7 @@ image: node:20
 
 pipelines:
   branches:
-    "**": 
+    main: 
       - step:
           name: Build & Deploy to Production
           caches:
@@ -43,7 +43,6 @@ pipelines:
             # 8) Confirm release.zip exists
             - ls -lh release.zip || { echo "❌ release.zip not found"; exit 1; }
 
-            # 9) Deploy via Kudu Zip Deploy
             # 9) Deploy via Kudu Zip Deploy
             - curl -X POST -L -u "$DEPLOY_USER:$DEPLOY_PWD" "https://${AZURE_SCM_URL}/api/zipdeploy" --data-binary "@release.zip"
 
