@@ -2,7 +2,7 @@ image: node:20
 
 pipelines:
   branches:
-    main:
+    "**": 
       - step:
           name: Build & Deploy to Production
           caches:
