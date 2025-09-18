@@ -44,5 +44,8 @@ pipelines:
             - ls -lh release.zip || { echo "❌ release.zip not found"; exit 1; }
 
             # 9) Deploy via Kudu Zip Deploy
-            - curl -X POST -L -u "$DEPLOY_USER:$DEPLOY_PWD" "https://${AZURE_SCM_URL}/api/zipdeploy" --data-binary "@release.zip"
+            - curl -X POST -u "$DEPLOY_USER:$DEPLOY_PWD" \
+              "https://$AZURE_SCM_URL/api/zipdeploy" \
+              --data-binary "@release.zip"
+
 
