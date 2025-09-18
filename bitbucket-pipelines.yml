@@ -31,11 +31,11 @@ pipelines:
 
             # 7) Debug: ensure variables exist
             - echo "Deploying main branch to Production Web App"
-            - echo "AZURE_WEBAPP_NAME=$AZURE_WEBAPP_NAME"
+            - echo "AZURE_SCM_URL=$AZURE_SCM_URL"
             - echo "DEPLOY_USER=$DEPLOY_USER"
             - echo "DEPLOY_PWD length=${#DEPLOY_PWD}"
             - |
-              if [ -z "$AZURE_WEBAPP_NAME" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_PWD" ]; then
+              if [ -z "$AZURE_SCM_URL" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_PWD" ]; then
                 echo "❌ Missing one or more deployment variables"
                 exit 1
               fi
@@ -44,5 +44,6 @@ pipelines:
             - ls -lh release.zip || { echo "❌ release.zip not found"; exit 1; }
 
             # 9) Deploy via Kudu Zip Deploy
-            - curl -X POST -L -u "$DEPLOY_USER:$DEPLOY_PWD" "https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net/api/zipdeploy" --data-binary "@release.zip"
+            # 9) Deploy via Kudu Zip Deploy
+            - curl -X POST -L -u "$DEPLOY_USER:$DEPLOY_PWD" "https://${AZURE_SCM_URL}/api/zipdeploy" --data-binary "@release.zip"
 
