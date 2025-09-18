@@ -23,6 +23,9 @@ pipelines:
             # 4) Verify build output
             - ls -la .next
 
+            # ✅ Install zip here
+            - apt-get update && apt-get install -y zip
+
             # 5) Package runtime bits
             - zip -r release.zip .next public package.json package-lock.json next.config.*
 
