@@ -23,6 +23,20 @@ interface Message {
   };
 }
 
+interface Doc {
+  url: string;
+  title?: string;
+  // add other fields if needed
+}
+
+interface Meta {
+  docs: Doc[];
+}
+
+interface Data {
+  meta: Meta;
+}
+
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -84,7 +98,7 @@ export default function Chat() {
           typeof data.meta.docs === "number"
             ? [`${data.meta.docs} source(s) retrieved`]
             : Array.isArray(data.meta.docs)
-            ? data.meta.docs.map((d: any) => d.url).filter(Boolean)
+            ? data.meta.docs.map((d: Doc) => d.url).filter(Boolean)
             : [],
         agentUsed: "orchestrator",
         requiresEscalation: data.meta.needs_clarification,
@@ -230,11 +244,9 @@ export default function Chat() {
                     <div className="text-xs text-muted-foreground break-words">
                       <span className="font-medium">Intent: </span>
                       {message.analysis.intent} |
-                      <span className="font-medium"> Sensitivity: </span>
-                      {message.analysis.sensitivityLevel}
                       {message.analysis.entities.length > 0 && (
                         <>
-                          <span className="font-medium"> | Entities: </span>
+                          <span className="font-medium"> Entity: </span>
                           {message.analysis.entities.slice(0, 3).join(", ")}
                         </>
                       )}

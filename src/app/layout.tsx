@@ -19,11 +19,14 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <SidebarProvider>
-          <div className="flex h-screen bg-background">
+          <div className="w-full flex h-screen bg-background relative">
+            {/* Sidebar overlay */}
             <AppSidebar />
-            <div className="flex flex-col flex-1">
+
+            {/* Main content */}
+            <div className="flex flex-col flex-1 ml-0">
               <Header />
-              <main className="flex-1 overflow-hidden">{children}</main>
+              <main className="flex-1 w-full min-h-screen">{children}</main>
             </div>
           </div>
         </SidebarProvider>
