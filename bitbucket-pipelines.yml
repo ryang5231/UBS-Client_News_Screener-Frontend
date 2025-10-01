@@ -1,15 +1,25 @@
 image: node:18
 
+options:
+  max-time: 30
+
 pipelines:
-  default:
-    - step:
-        name: Build & Deploy
-        script:
-          - npm ci
-          - npm run build
-          - pipe: microsoft/azure-static-web-apps-deploy:main
-            variables:
-              APP_LOCATION: '$BITBUCKET_CLONE_DIR/build'
-              OUTPUT_LOCATION: ''
-              SKIP_APP_BUILD: 'true'
-              API_TOKEN: $deployment_token
+  branches:
+    main:
+      - step:
+          name: Build & Deploy (Kudu ZIP Deploy)
+          caches:
+            - node
+          script:
+            # 1) Install dependencies and build
+            - npm ci
+            - npm run build
+
+            # 2) Package the contents of out/ at the ZIP root
+            - cd out && zip -r ../out-deploy.zip . && cd ..
+
+            # 3) Deploy via Kudu ZIP push using publish profile credentials
+            - >
+              curl -X POST "https://$PUBLISH_URL/api/zipdeploy"
+              -u "$USER:$PWD"
+              --data-binary @out-deploy.zip
