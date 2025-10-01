@@ -8,18 +8,12 @@ pipelines:
     main:
       - step:
           name: Build & Deploy (Kudu ZIP Deploy)
+          deployment: production
           caches:
             - node
           script:
-            # 1) Install dependencies and build
+            - apt-get update && apt-get install -y zip unzip
             - npm ci
             - npm run build
-
-            # 2) Package the contents of out/ at the ZIP root
             - cd out && zip -r ../out-deploy.zip . && cd ..
-
-            # 3) Deploy via Kudu ZIP push using publish profile credentials
-            - >
-              curl -X POST "https://$PUBLISH_URL/api/zipdeploy"
-              -u "$USER:$PWD"
-              --data-binary @out-deploy.zip
+            - curl -X POST -u "$USER:$PWD" -T out-deploy.zip "https://$PUBLISH_URL/api/zipdeploy"
