@@ -26,15 +26,6 @@ interface Message {
 interface Doc {
   url: string;
   title?: string;
-  // add other fields if needed
-}
-
-interface Meta {
-  docs: Doc[];
-}
-
-interface Data {
-  meta: Meta;
 }
 
 export default function Chat() {

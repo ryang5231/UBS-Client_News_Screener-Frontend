@@ -16,7 +16,9 @@ export function AppSidebar() {
   const routes = [
     { name: "Home", path: "/" },
     { name: "Chat", path: "/chat" },
-/*     { name: "Client", path: "/clients" },
+    { name: "Articles", path: "/articles" },
+       { name: "Financials", path: "/financials" },
+    /*     { name: "Client", path: "/clients" },
     { name: "Alert", path: "/alert" }, */
   ];
 
