@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, AlertCircle, Clock } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Send,
+  AlertCircle,
+  Clock,
+  Bot,
+  User,
+  ExternalLink,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -43,6 +52,15 @@ export default function Chat() {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -89,8 +107,8 @@ export default function Chat() {
           typeof data.meta.docs === "number"
             ? [`${data.meta.docs} source(s) retrieved`]
             : Array.isArray(data.meta.docs)
-            ? data.meta.docs.map((d: Doc) => d.url).filter(Boolean)
-            : [],
+              ? data.meta.docs.map((d: Doc) => d.url).filter(Boolean)
+              : [],
         agentUsed: "orchestrator",
         requiresEscalation: data.meta.needs_clarification,
       };
@@ -123,174 +141,247 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full">
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 w-full">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex w-full",
-              message.sender === "user" ? "justify-end" : "justify-start"
-            )}
-          >
+    <div className="flex flex-col h-screen w-full bg-muted/20">
+      {/* Header */}
+      <div className="border-b bg-background p-4 shadow-sm">
+        <div className="flex items-center justify-between max-w-5xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Bot className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">
+                UBS Wealth Advisory Assistant
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                AI-powered financial insights
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="gap-1">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            Online
+          </Badge>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 w-full">
+        <div className="max-w-5xl mx-auto w-full space-y-4">
+          {messages.map((message) => (
             <div
+              key={message.id}
               className={cn(
-                "w-full sm:max-w-[70%] rounded-lg p-4 break-words",
-                message.sender === "user"
-                  ? "bg-background border border-border"
-                  : "bg-background border border-border"
+                "flex w-full gap-3",
+                message.sender === "user" ? "justify-end" : "justify-start",
               )}
             >
-              <div className="text-sm leading-relaxed space-y-2 break-words">
-                {message.content.split("\n").map((line, idx) => {
-                  // First line is always h3
-                  if (idx === 0) {
-                    return (
-                      <h3 key={idx} className="font-bold text-lg break-words">
-                        {line.replace(/\*\*/g, "")}
-                      </h3>
-                    );
-                  }
+              {/* Avatar for assistant */}
+              {message.sender === "assistant" && (
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-primary" />
+                  </div>
+                </div>
+              )}
 
-                  // Bold header lines
-                  if (line.startsWith("**") && line.endsWith("**")) {
-                    return (
-                      <h3 key={idx} className="font-bold text-lg break-words">
-                        {line.replace(/\*\*/g, "")}
-                      </h3>
-                    );
-                  }
+              <Card
+                className={cn(
+                  "max-w-[80%] shadow-sm",
+                  message.sender === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background",
+                )}
+              >
+                <CardContent className="p-4">
+                  <div className="text-sm leading-relaxed space-y-2 break-words">
+                    {message.content.split("\n").map((line, idx) => {
+                      // First line is always h3
+                      if (idx === 0) {
+                        return (
+                          <h3
+                            key={idx}
+                            className="font-bold text-lg break-words"
+                          >
+                            {line.replace(/\*\*/g, "")}
+                          </h3>
+                        );
+                      }
 
-                  // Bullet points
-                  if (line.startsWith("• ")) {
-                    const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
-                    const text = line
-                      .replace("• ", "")
-                      .replace(urlMatch?.[0] ?? "", "")
-                      .trim();
-                    return (
-                      <ul
-                        key={idx}
-                        className="ml-4 list-disc break-words w-full"
-                      >
-                        <li className="break-words">
-                          {text}
-                          {urlMatch && (
+                      // Bold header lines
+                      if (line.startsWith("**") && line.endsWith("**")) {
+                        return (
+                          <h3
+                            key={idx}
+                            className="font-bold text-lg break-words"
+                          >
+                            {line.replace(/\*\*/g, "")}
+                          </h3>
+                        );
+                      }
+
+                      // Bullet points
+                      if (line.startsWith("• ")) {
+                        const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
+                        const text = line
+                          .replace("• ", "")
+                          .replace(urlMatch?.[0] ?? "", "")
+                          .trim();
+                        return (
+                          <ul
+                            key={idx}
+                            className="ml-4 list-disc break-words w-full"
+                          >
+                            <li className="break-words">
+                              {text}
+                              {urlMatch && (
+                                <>
+                                  {" "}
+                                  <a
+                                    href={urlMatch[0]}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 underline break-words"
+                                  >
+                                    link
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </>
+                              )}
+                            </li>
+                          </ul>
+                        );
+                      }
+
+                      // Lines with standalone URLs
+                      const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
+                      if (urlMatch) {
+                        const text =
+                          line.replace(urlMatch[0], "").trim() || "link";
+                        return (
+                          <p key={idx} className="break-words">
+                            {text}{" "}
+                            <a
+                              href={urlMatch[0]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 underline break-words"
+                            >
+                              link
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </p>
+                        );
+                      }
+
+                      // Default paragraph
+                      return (
+                        <p key={idx} className="break-words">
+                          {line}
+                        </p>
+                      );
+                    })}
+                  </div>
+
+                  {/* Assistant metadata */}
+                  {message.sender === "assistant" && (
+                    <div className="mt-3 space-y-2">
+                      {message.sources && (
+                        <div className="text-xs text-muted-foreground break-words">
+                          <span className="font-medium">Sources: </span>
+                          {message.sources.join(", ")}
+                        </div>
+                      )}
+
+                      {message.analysis && (
+                        <div className="text-xs text-muted-foreground break-words">
+                          <span className="font-medium">Intent: </span>
+                          {message.analysis.intent} |
+                          {message.analysis.entities.length > 0 && (
                             <>
-                              {" — "}
-                              <a
-                                href={urlMatch[0]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 underline break-words"
-                              >
-                                link
-                              </a>
+                              <span className="font-medium"> Entity: </span>
+                              {message.analysis.entities.slice(0, 3).join(", ")}
                             </>
                           )}
-                        </li>
-                      </ul>
-                    );
-                  }
-
-                  // Lines with standalone URLs
-                  const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
-                  if (urlMatch) {
-                    const text = line.replace(urlMatch[0], "").trim() || "link";
-                    return (
-                      <p key={idx} className="break-words">
-                        {text} —{" "}
-                        <a
-                          href={urlMatch[0]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline break-words"
-                        >
-                          link
-                        </a>
-                      </p>
-                    );
-                  }
-
-                  // Default paragraph
-                  return (
-                    <p key={idx} className="break-words">
-                      {line}
-                    </p>
-                  );
-                })}
-              </div>
-
-              {/* Assistant metadata */}
-              {message.sender === "assistant" && (
-                <div className="mt-3 space-y-2">
-                  {message.sources && (
-                    <div className="text-xs text-muted-foreground break-words">
-                      <span className="font-medium">Sources: </span>
-                      {message.sources.join(", ")}
-                    </div>
-                  )}
-
-                  {message.analysis && (
-                    <div className="text-xs text-muted-foreground break-words">
-                      <span className="font-medium">Intent: </span>
-                      {message.analysis.intent} |
-                      {message.analysis.entities.length > 0 && (
-                        <>
-                          <span className="font-medium"> Entity: </span>
-                          {message.analysis.entities.slice(0, 3).join(", ")}
-                        </>
+                        </div>
                       )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* User timestamp */}
+                  {/* User timestamp */}
+                  {message.sender === "user" && (
+                    <div className="mt-2 text-xs text-right opacity-70">
+                      {formatTime(message.timestamp)}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Avatar for user */}
               {message.sender === "user" && (
-                <div className="mt-2 text-xs text-muted-foreground text-right">
-                  {formatTime(message.timestamp)}
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <User className="w-5 h-5 text-primary-foreground" />
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        ))}
+          ))}
+
+          <div ref={messagesEndRef} />
+        </div>
 
         {isLoading && (
-          <div className="flex justify-start w-full">
-            <div className="bg-background border border-border rounded-lg p-4 w-full sm:max-w-[70%] break-words">
-              <div className="flex items-center space-x-2 text-muted-foreground">
-                <Clock className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Processing your request...</span>
+          <div className="max-w-5xl mx-auto w-full">
+            <div className="flex justify-start w-full gap-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Bot className="w-5 h-5 text-primary" />
+                </div>
               </div>
+              <Card className="max-w-[80%] shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2 text-muted-foreground">
+                    <Clock className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Processing your request...</span>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}
       </div>
       {/* Input Area */}
-      <div className="border-t border-border p-4 bg-background sticky bottom-0 w-full">
-        <div className="flex space-x-4 w-full">
-          <Input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Ask about client portfolios, market insights, or compliance matters..."
-            className="flex-1"
-            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            disabled={isLoading}
-          />
-          <Button
-            onClick={handleSendMessage}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            disabled={isLoading}
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
+      <div className="border-t border-border p-4 bg-background shadow-lg">
+        <div className="max-w-5xl mx-auto w-full space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Ask about client portfolios, market insights, or compliance matters..."
+              className="flex-1 text-base"
+              onKeyDown={(e) =>
+                e.key === "Enter" && !e.shiftKey && handleSendMessage()
+              }
+              disabled={isLoading}
+            />
+            <Button
+              onClick={handleSendMessage}
+              size="lg"
+              className="px-6"
+              disabled={isLoading || !inputValue.trim()}
+            >
+              <Send className="w-5 h-5" />
+            </Button>
+          </div>
 
-        <div className="mt-2 text-xs text-muted-foreground text-center">
-          <AlertCircle className="w-3 h-3 inline mr-1" />
-          All conversations are recorded for compliance and quality assurance
-          purposes.
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <AlertCircle className="w-3 h-3" />
+            <span>
+              All conversations are recorded for compliance and quality
+              assurance purposes.
+            </span>
+          </div>
         </div>
       </div>
     </div>
