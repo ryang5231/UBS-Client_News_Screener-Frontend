@@ -3,6 +3,21 @@ image: node:18
 options:
   max-time: 30
 
+definitions:
+  steps:
+    - step: &mirror_github
+        name: Mirror to GitHub
+        script:
+          - echo "[MIRROR] Starting sync to GitHub..."
+          - apt-get update && apt-get install -y git
+          - git config --global user.email "ci-bot@bitbucket.org"
+          - git config --global user.name "Bitbucket CI Bot"
+          # Add GitHub remote using token auth
+          - git remote add github "https://x-access-token:${SEEMA_GITHUB_TOKEN}@${GITHUB_REPO_URL}"
+          # Mirror all branches and tags from Bitbucket to GitHub
+          - git push --mirror github
+          - echo "[MIRROR] Sync completed!"
+
 pipelines:
   branches:
     main:
