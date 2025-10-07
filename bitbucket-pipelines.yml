@@ -21,6 +21,7 @@ definitions:
 pipelines:
   branches:
     main:
+      - step: *mirror_github
       - step:
           name: Build & Deploy (Kudu ZIP Deploy)
           deployment: production
