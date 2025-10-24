@@ -29,7 +29,7 @@ export default function RootLayout({
               <Header />
               <main className="flex-1 w-full min-h-screen">{children}</main>
 
-              {/* ✅ Toast notifications are rendered globally here */}
+              {/* Toast notifications are rendered globally here */}
               <NotificationToast />
             </div>
           </div>
