@@ -4,6 +4,7 @@ import "./globals.css";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Header } from "@/components/layout/header";
+import NotificationToast from "@/components/NotificationToast";
 
 export const metadata: Metadata = {
   title: "FYP UBS Frontend",
@@ -24,9 +25,12 @@ export default function RootLayout({
             <AppSidebar />
 
             {/* Main content */}
-            <div className="flex flex-col flex-1 ml-0">
+            <div className="flex flex-col flex-1 ml-0 relative">
               <Header />
               <main className="flex-1 w-full min-h-screen">{children}</main>
+
+              {/* ✅ Toast notifications are rendered globally here */}
+              <NotificationToast />
             </div>
           </div>
         </SidebarProvider>
