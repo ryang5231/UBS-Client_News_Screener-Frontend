@@ -8,22 +8,41 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  ChevronLeft,
+  ExternalLink,
+} from "lucide-react";
+
+interface Summary {
+  summary_text: string;
+  model_type?: string;
+  is_relevant?: boolean;
+  created_at?: string;
+  business_area?: string;
+  content_type?: string;
+}
+
+interface SimilarArticle {
+  id: string;
+  title: string;
+  similarity: number;
+  content_type: string;
+  publish_date: string;
+}
+
+interface FactCheck {
+  status: string;
+  confidence?: number;
+  evidence?: string;
+  actionable_insight?: string;
+  status_change?: string;
+}
 
 interface Article {
   person: string;
@@ -31,16 +50,11 @@ interface Article {
   url: string;
   source: string;
   content: string;
-  summary: {
-    summary_text: string;
-    summary_title: string;
-    summary_url: string;
-  };
   publish_date?: string;
-  birthdate?: string;
-  age?: number;
-  net_worth?: string;
   id: string;
+  summary: Summary;
+  similar_articles?: SimilarArticle[];
+  fact_check?: FactCheck;
 }
 
 interface HNWIPerson {
@@ -69,7 +83,30 @@ const ArticlesPage: React.FC = () => {
   const [hnwiPeople, setHnwiPeople] = useState<HNWIPerson[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<string>("");
   const [loadingPeople, setLoadingPeople] = useState(true);
+  const [expandedArticles, setExpandedArticles] = useState<Set<string>>(
+    new Set(),
+  );
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
+  const [pagination, setPagination] = useState({
+    total: 0,
+    hasMore: false,
+    skip: 0,
+    limit: 10,
+  });
   const pageSize = 10; // articles per page
+
+  const toggleArticleExpand = (articleId: string) => {
+    setExpandedArticles((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(articleId)) {
+        newSet.delete(articleId);
+      } else {
+        newSet.add(articleId);
+      }
+      return newSet;
+    });
+  };
 
   const dbUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -99,19 +136,56 @@ const ArticlesPage: React.FC = () => {
     fetchHNWIPeople();
   }, [dbUrl]);
 
-  // Fetch articles when selected person changes
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
+  // Fetch articles when selected person or search query changes
   useEffect(() => {
     if (!selectedPerson) return;
 
     const fetchArticles = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
+        const url = new URL(
           `${dbUrl}/db/articles/${encodeURIComponent(selectedPerson)}`,
         );
+
+        // Add query parameters
+        if (debouncedSearchQuery) {
+          url.searchParams.append("search", debouncedSearchQuery);
+        }
+
+        // Add pagination parameters
+        const skip = (currentPage - 1) * pageSize;
+        url.searchParams.append("limit", pageSize.toString());
+        url.searchParams.append("skip", skip.toString());
+
+        const res = await fetch(url.toString());
         const data = await res.json();
-        setArticles(data.articles || []);
-        setCurrentPage(1); // Reset to first page when person changes
+
+        // If it's the first page, replace the articles, otherwise append
+        setArticles((prevArticles) =>
+          currentPage === 1
+            ? data.items || []
+            : [...prevArticles, ...(data.items || [])],
+        );
+
+        // Update pagination state
+        setPagination({
+          total: data.total || 0,
+          hasMore: data.has_more || false,
+          skip: data.skip || 0,
+          limit: data.limit || pageSize,
+        });
       } catch (err) {
         console.error("Error fetching articles:", err);
       } finally {
@@ -120,14 +194,21 @@ const ArticlesPage: React.FC = () => {
     };
 
     fetchArticles();
-  }, [dbUrl, selectedPerson]);
+  }, [dbUrl, selectedPerson, debouncedSearchQuery, currentPage, pageSize]);
 
-  // Pagination
-  const totalPages = Math.ceil(articles.length / pageSize);
-  const currentArticles = articles.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  // Calculate total pages based on the total count from the API
+  // If total is 0 but we have items, it means the API didn't provide a total count
+  const totalPages =
+    pagination.total > 0
+      ? Math.ceil(pagination.total / pageSize)
+      : currentPage + (pagination.hasMore ? 1 : 0);
+
+  const currentArticles = articles; // We get the current page's data directly from the API
+
+  // Determine if we should show the Next button
+  const showNextButton =
+    pagination.hasMore ||
+    (pagination.total > 0 && articles.length < pagination.total);
 
   return (
     <div className="p-6 space-y-6">
@@ -144,47 +225,92 @@ const ArticlesPage: React.FC = () => {
       </div>
 
       {/* HNWI Person Dropdown */}
-      <div className="mb-6">
-        <label
-          htmlFor="person-select"
-          className="block text-sm font-medium mb-2"
-        >
-          Select Person:
-        </label>
-        {loadingPeople ? (
-          <p className="text-muted-foreground">Loading people...</p>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full max-w-md justify-between"
-              >
-                {selectedPerson || "Select a person"}
-              </Button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              className="w-full max-w-md p-0"
-              align="start"
-              style={{
-                maxHeight: "12rem", // roughly fits ~5 items
-                overflowY: "auto", // enables scrolling when >5 items
-                width: "var(--radix-dropdown-menu-trigger-width)", // same width as trigger
-              }}
-            >
-              {hnwiPeople.map((hnwi) => (
-                <DropdownMenuItem
-                  key={hnwi.person}
-                  onClick={() => setSelectedPerson(hnwi.person)}
-                  className="cursor-pointer"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="space-y-2">
+          <label htmlFor="person-select" className="block text-sm font-medium">
+            Select Person
+          </label>
+          {loadingPeople ? (
+            <p className="text-muted-foreground">Loading people...</p>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full max-w-md justify-between truncate"
                 >
-                  {hnwi.person}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                  <span className="truncate">
+                    {selectedPerson || "Select a person"}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                className="w-[calc(100vw-2rem)] sm:w-full max-w-md p-0"
+                align="start"
+                sideOffset={4}
+                collisionPadding={16}
+                style={{
+                  maxHeight: "min(24rem, 70vh)",
+                  overflowY: "auto",
+                  width: "var(--radix-dropdown-menu-trigger-width)",
+                  maxWidth: "calc(100vw - 2rem)",
+                }}
+              >
+                {hnwiPeople.map((hnwi) => (
+                  <DropdownMenuItem
+                    key={hnwi.person}
+                    onSelect={() => setSelectedPerson(hnwi.person)}
+                    className="cursor-pointer px-4 py-2 hover:bg-muted/50 focus:bg-muted/50"
+                  >
+                    <span className="truncate">{hnwi.person}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="search-articles"
+            className="block text-sm font-medium"
+          >
+            Search Articles
+          </label>
+          <div className="relative">
+            <input
+              id="search-articles"
+              type="text"
+              placeholder="Search by title..."
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {!selectedPerson ? (
@@ -192,90 +318,327 @@ const ArticlesPage: React.FC = () => {
           Please select a person to view articles.
         </p>
       ) : loading ? (
-        <p className="text-muted-foreground">Loading articles...</p>
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-4">
+                <div className="h-4 bg-muted rounded w-3/4 mb-3"></div>
+                <div className="h-3 bg-muted rounded w-1/2 mb-2"></div>
+                <div className="flex justify-between mt-4">
+                  <div className="h-3 bg-muted rounded w-24"></div>
+                  <div className="h-6 bg-muted rounded w-20"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : articles.length === 0 ? (
-        <p className="text-muted-foreground">
-          No articles found for {selectedPerson}
-        </p>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg">
+            No articles found for {selectedPerson}
+          </p>
+          <p className="text-muted-foreground text-sm mt-2">
+            Try selecting a different person or check back later for updates.
+          </p>
+        </div>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Articles for {selectedPerson}</CardTitle>
-            <CardDescription>
-              Showing {currentArticles.length} of {articles.length} articles
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[10%] text-base">Title</TableHead>
-                  <TableHead className="w-[5%] text-base">Source</TableHead>
-                  <TableHead className="w-[30%] text-base">Summary</TableHead>
-                  <TableHead className="w-[5%] text-base">
-                    Publish Date
-                  </TableHead>
-                  <TableHead className="w-[5%] text-base">URL</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentArticles.map((article) => (
-                  <TableRow key={article.id}>
-                    <TableCell className="font-medium text-base whitespace-normal break-words">
-                      {article.title}
-                    </TableCell>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">
+              Articles for {selectedPerson}
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({articles.length} total)
+              </span>
+            </h2>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages > 0 ? totalPages : 1}
+                {pagination.total > 0 && (
+                  <>
+                    {" • "}
+                    Showing {pagination.skip + 1}-
+                    {Math.min(
+                      pagination.skip + articles.length,
+                      pagination.total,
+                    )}
+                    {pagination.total > 0
+                      ? ` of ${pagination.total} articles`
+                      : " articles"}
+                  </>
+                )}
+                {pagination.total === 0 &&
+                  articles.length > 0 &&
+                  " (All available articles)"}
+              </span>
+            </div>
+          </div>
 
-                    <TableCell className="text-base">
-                      {article.source}
-                    </TableCell>
-                    <TableCell className="max-w-md">
-                      <textarea
-                        readOnly
-                        value={article.summary.summary_text}
-                        className="w-full min-h-[80px] p-2 text-base border rounded resize-none bg-muted/50 focus:outline-none"
-                        rows={5}
-                      />
-                    </TableCell>
-                    <TableCell className="text-base">
-                      {formatDate(article.publish_date)}
-                    </TableCell>
-                    <TableCell>
-                      <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-medium text-base"
-                      >
-                        Link
-                      </a>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="grid gap-4">
+            {currentArticles.map((article) => {
+              const isExpanded = expandedArticles.has(article.id);
+              const factCheckStatus =
+                article.fact_check?.status?.toLowerCase() || "unverified";
+              const factCheckColor =
+                {
+                  verified: "bg-green-100 text-green-800 border-green-200",
+                  "partially verified":
+                    "bg-yellow-100 text-yellow-800 border-yellow-200",
+                  unverified: "bg-gray-100 text-gray-800 border-gray-200",
+                  false: "bg-red-100 text-red-800 border-red-200",
+                }[factCheckStatus] ||
+                "bg-gray-100 text-gray-800 border-gray-200";
 
-            {/* Pagination controls */}
-            <div className="mt-6 flex justify-center items-center gap-4">
+              return (
+                <Card
+                  key={article.id}
+                  className={`transition-all duration-200 ${isExpanded ? "ring-2 ring-primary/20" : "hover:shadow-md"}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <Badge
+                            variant="outline"
+                            className={`${factCheckColor} border rounded-full px-2.5 py-0.5 text-xs font-medium`}
+                          >
+                            {article.fact_check?.status || "Unverified"}
+                            {article.fact_check?.confidence &&
+                              ` (${article.fact_check.confidence}%)`}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(article.publish_date)}
+                          </span>
+                        </div>
+
+                        <h3 className="text-lg font-medium leading-tight line-clamp-2">
+                          {article.title}
+                        </h3>
+
+                        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                          <span className="truncate">
+                            {new URL(article.url).hostname.replace("www.", "")}
+                          </span>
+                          <span>•</span>
+                          <Badge variant="outline" className="text-xs">
+                            {article.summary.content_type
+                              ? article.summary.content_type
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                article.summary.content_type.slice(1)
+                              : "Unknown"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex space-x-1 ml-2">
+                        <a
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-full hover:bg-muted"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                        </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleArticleExpand(article.id);
+                          }}
+                          className="p-1.5 rounded-full hover:bg-muted"
+                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t space-y-4">
+                        <div>
+                          <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                            SUMMARY
+                          </h4>
+                          <p className="text-sm whitespace-pre-line">
+                            {article.summary.summary_text ||
+                              "No summary available."}
+                          </p>
+                        </div>
+
+                        {article.fact_check && (
+                          <div>
+                            <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                              FACT CHECK
+                            </h4>
+                            <div className="space-y-3">
+                              {article.fact_check.evidence && (
+                                <div className="bg-muted/30 p-3 rounded-md">
+                                  <p className="text-sm">
+                                    {article.fact_check.evidence}
+                                  </p>
+                                </div>
+                              )}
+                              {article.fact_check.actionable_insight && (
+                                <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                  <p className="text-sm font-medium text-blue-800 mb-1">
+                                    Insight
+                                  </p>
+                                  <p className="text-sm text-blue-700">
+                                    {article.fact_check.actionable_insight}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {article.similar_articles &&
+                          article.similar_articles.length > 0 && (
+                            <div className="border rounded-md overflow-hidden">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const relatedId = `related-${article.id}`;
+                                  const relatedEl =
+                                    document.getElementById(relatedId);
+                                  if (relatedEl) {
+                                    relatedEl.classList.toggle("hidden");
+                                    const icon =
+                                      e.currentTarget.querySelector("svg");
+                                    if (icon) {
+                                      icon.classList.toggle("rotate-90");
+                                    }
+                                  }
+                                }}
+                                className="w-full text-left p-3 hover:bg-muted/30 flex items-center justify-between text-sm font-medium"
+                              >
+                                <span>
+                                  Related Articles (
+                                  {article.similar_articles.length})
+                                </span>
+                                <ChevronRight className="h-4 w-4 transition-transform duration-200" />
+                              </button>
+                              <div
+                                id={`related-${article.id}`}
+                                className="hidden"
+                              >
+                                <div className="max-h-60 overflow-y-auto border-t">
+                                  <div className="space-y-3 p-3">
+                                    {article.similar_articles.map(
+                                      (similar, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="border-l-2 border-muted-foreground/20 pl-3 py-1"
+                                        >
+                                          <div className="flex flex-col gap-1">
+                                            <a
+                                              href={`#${similar.id}`}
+                                              className="text-sm font-medium break-words hover:underline"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              {similar.title}
+                                            </a>
+                                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                              <Badge
+                                                variant="outline"
+                                                className="text-xs"
+                                              >
+                                                {similar.content_type}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {formatDate(
+                                                  similar.publish_date,
+                                                )}
+                                              </span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {(
+                                                  similar.similarity * 100
+                                                ).toFixed(0)}
+                                                % similar
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6">
               <Button
                 variant="outline"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((p) => p - 1)}
+                className="gap-1"
               >
+                <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
+
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Calculate page numbers to show (current page in the middle when possible)
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="h-8 w-8 p-0"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <span className="px-2 text-sm text-muted-foreground">
+                    ...
+                  </span>
+                )}
+              </div>
               <Button
                 variant="outline"
-                disabled={currentPage === totalPages}
+                size="sm"
                 onClick={() => setCurrentPage((p) => p + 1)}
+                disabled={!showNextButton}
               >
                 Next
+                <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
     </div>
   );
