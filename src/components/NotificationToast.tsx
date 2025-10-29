@@ -19,8 +19,15 @@ export default function NotificationToast() {
             📰 New article on {n.person}
           </div>
           <p className="text-sm text-gray-600 mt-1">{n.message}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            {new Date(n.timestamp).toLocaleTimeString()}
+          <p className="text-sm text-muted-foreground">
+            {new Date(n.timestamp + "Z").toLocaleString("en-SG", {
+              timeZone: "Asia/Singapore",
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </p>
           <button
             onClick={() => markAsRead([n.id])}
