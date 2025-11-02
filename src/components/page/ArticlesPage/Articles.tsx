@@ -19,13 +19,38 @@ import {
   ExternalLink,
 } from "lucide-react";
 
+interface Sentiment {
+  overall: string;
+  score?: number;
+  confidence: number;
+}
+
+interface KeyEntity {
+  name: string;
+  type: string;
+  relevance: number;
+  sentiment: string;
+  mentions: number;
+}
+
+interface FinancialImpact {
+  has_impact: boolean;
+  affected_companies: string[];
+  impact_type: string;
+}
+
 interface Summary {
   summary_text: string;
-  model_type?: string;
-  is_relevant?: boolean;
-  created_at?: string;
-  business_area?: string;
-  content_type?: string;
+  model_type: string;
+  is_relevant: boolean;
+  created_at: string;
+  business_area: string;
+  content_type: string;
+  sentiment: Sentiment;
+  key_entities: KeyEntity[];
+  topics: string[];
+  financial_impact: FinancialImpact;
+  source_credibility: string;
 }
 
 interface SimilarArticle {
@@ -172,19 +197,15 @@ const ArticlesPage: React.FC = () => {
         const res = await fetch(url.toString());
         const data = await res.json();
 
-        // If it's the first page, replace the articles, otherwise append
-        setArticles((prevArticles) =>
-          currentPage === 1
-            ? data.items || []
-            : [...prevArticles, ...(data.items || [])],
-        );
+        // Always replace the articles with the new page's data
+        setArticles(data.items || []);
 
         // Update pagination state
         setPagination({
           total: data.total || 0,
           hasMore: data.has_more || false,
-          skip: data.skip || 0,
-          limit: data.limit || pageSize,
+          skip: skip,
+          limit: pageSize,
         });
       } catch (err) {
         console.error("Error fetching articles:", err);
@@ -197,18 +218,13 @@ const ArticlesPage: React.FC = () => {
   }, [dbUrl, selectedPerson, debouncedSearchQuery, currentPage, pageSize]);
 
   // Calculate total pages based on the total count from the API
-  // If total is 0 but we have items, it means the API didn't provide a total count
-  const totalPages =
-    pagination.total > 0
-      ? Math.ceil(pagination.total / pageSize)
-      : currentPage + (pagination.hasMore ? 1 : 0);
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pageSize));
 
-  const currentArticles = articles; // We get the current page's data directly from the API
+  // Current articles are always what's in state (current page)
+  const currentArticles = articles;
 
-  // Determine if we should show the Next button
-  const showNextButton =
-    pagination.hasMore ||
-    (pagination.total > 0 && articles.length < pagination.total);
+  // Show next button if there are more pages or if we know there are more items
+  const showNextButton = currentPage < totalPages;
 
   return (
     <div className="p-6 space-y-6">
@@ -460,15 +476,158 @@ const ArticlesPage: React.FC = () => {
 
                     {isExpanded && (
                       <div className="mt-4 pt-4 border-t space-y-4">
-                        <div>
-                          <h4 className="font-medium text-sm text-muted-foreground mb-2">
-                            SUMMARY
-                          </h4>
-                          <p className="text-sm whitespace-pre-line">
-                            {article.summary.summary_text ||
-                              "No summary available."}
+                        {/* Summary Section */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-sm text-muted-foreground">
+                              SUMMARY
+                            </h4>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="outline" className="text-xs">
+                                {article.summary.content_type}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {article.summary.business_area}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed">
+                            {article.summary.summary_text}
                           </p>
                         </div>
+
+                        {/* Sentiment & Key Metrics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Sentiment */}
+                          {article.summary.sentiment?.overall && (
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">
+                                SENTIMENT
+                              </h4>
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className={`px-3 py-1.5 rounded-full font-medium text-sm ${
+                                    article.summary.sentiment.overall ===
+                                    "positive"
+                                      ? "bg-green-50 text-green-800"
+                                      : article.summary.sentiment.overall ===
+                                          "negative"
+                                        ? "bg-red-50 text-red-800"
+                                        : "bg-gray-50 text-gray-800"
+                                  }`}
+                                >
+                                  {article.summary.sentiment.overall
+                                    .charAt(0)
+                                    .toUpperCase() +
+                                    article.summary.sentiment.overall.slice(1)}
+                                  {article.summary.sentiment.score !==
+                                    undefined && (
+                                    <span className="ml-1 font-normal">
+                                      (
+                                      {Math.round(
+                                        article.summary.sentiment.score * 100,
+                                      )}
+                                      %)
+                                    </span>
+                                  )}
+                                </div>
+                                {article.summary.sentiment.confidence !==
+                                  undefined && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Confidence:{" "}
+                                    {Math.round(
+                                      article.summary.sentiment.confidence *
+                                        100,
+                                    )}
+                                    %
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Financial Impact */}
+                          {article.summary.financial_impact?.has_impact && (
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">
+                                FINANCIAL IMPACT
+                              </h4>
+                              <div className="flex items-center space-x-2">
+                                <div className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded-full text-sm font-medium">
+                                  {article.summary.financial_impact.impact_type
+                                    .split("_")
+                                    .map(
+                                      (word) =>
+                                        word.charAt(0).toUpperCase() +
+                                        word.slice(1),
+                                    )
+                                    .join(" ")}
+                                </div>
+                                <div className="text-sm">
+                                  {article.summary.financial_impact.affected_companies.join(
+                                    ", ",
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Key Entities */}
+                        {article.summary.key_entities &&
+                          article.summary.key_entities.length > 0 && (
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">
+                                KEY ENTITIES
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {article.summary.key_entities
+                                  .sort((a, b) => b.relevance - a.relevance)
+                                  .slice(0, 5)
+                                  .map((entity, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="text-xs bg-muted/30 rounded-full px-3 py-1.5 border"
+                                    >
+                                      <span className="font-medium">
+                                        {entity.name}
+                                      </span>
+                                      <span className="text-muted-foreground ml-1">
+                                        ({entity.type})
+                                      </span>
+                                      <span className="ml-2 text-muted-foreground text-[11px]">
+                                        {entity.sentiment} •{" "}
+                                        {Math.round(entity.relevance * 100)}% •{" "}
+                                        {entity.mentions}{" "}
+                                        {entity.mentions === 1
+                                          ? "mention"
+                                          : "mentions"}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Topics */}
+                        {article.summary.topics &&
+                          article.summary.topics.length > 0 && (
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">
+                                TOPICS
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {article.summary.topics.map((topic, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="text-xs bg-muted/20 hover:bg-muted/30 transition-colors rounded-full px-3 py-1"
+                                  >
+                                    {topic}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                         {article.fact_check && (
                           <div>
@@ -582,18 +741,18 @@ const ArticlesPage: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-6">
-              <Button
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-                className="gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
+          <div className="flex justify-between items-center mt-6">
+            <Button
+              variant="outline"
+              disabled={currentPage === 1 || totalPages <= 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
 
+            {totalPages > 0 && (
               <div className="flex items-center space-x-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   // Calculate page numbers to show (current page in the middle when possible)
@@ -627,17 +786,18 @@ const ArticlesPage: React.FC = () => {
                   </span>
                 )}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => p + 1)}
-                disabled={!showNextButton}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          )}
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={!showNextButton || totalPages <= 1}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       )}
     </div>
