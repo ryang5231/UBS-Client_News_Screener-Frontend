@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useChat } from "@/app/context/ChatContext";
 import {
   Send,
   AlertCircle,
@@ -12,6 +13,7 @@ import {
   Bot,
   User,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,20 +40,29 @@ interface Doc {
 }
 
 export default function Chat() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content:
-        "Hello! I'm your UBS Wealth Advisory Assistant. I can help you with client intelligence, portfolio analysis, and compliance checks. How can I assist you today?",
-      sender: "assistant",
-      timestamp: new Date(),
-      confidence: 95,
-      compliance: true,
-      agentUsed: "orchestrator",
-    },
-  ]);
+  const {
+    messages,
+    setMessages,
+    sessionId,
+    setSessionId,
+    isLoading,
+    setIsLoading,
+  } = useChat();
+  // const [sessionId, setSessionId] = useState<string | null>(null);
+  // const [messages, setMessages] = useState<Message[]>([
+  //   {
+  //     id: "1",
+  //     content:
+  //       "Hello! I'm your UBS Wealth Advisory Assistant. I can help you with client intelligence, portfolio analysis, and compliance checks. How can I assist you today?",
+  //     sender: "assistant",
+  //     timestamp: new Date(),
+  //     confidence: 95,
+  //     compliance: true,
+  //     agentUsed: "orchestrator",
+  //   },
+  // ]);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  // const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -61,6 +72,31 @@ export default function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Initialize session on mount by calling /welcome
+  useEffect(() => {
+    const initSession = async () => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      try {
+        const response = await fetch(`${apiUrl}/welcome`, {
+          method: "POST",
+          credentials: "include", // Important: Include cookies
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await response.json();
+        setSessionId(data.session_id);
+        console.log("Session initialized:", data.session_id);
+      } catch (error) {
+        console.error("Failed to initialize session:", error);
+        setSessionId("Error");
+      }
+    };
+
+    initSession();
+  }, []);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -81,20 +117,27 @@ export default function Chat() {
     try {
       const response = await fetch(`${apiUrl}/chat`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           text: currentInput,
-          session_id: "demo",
+          session_id: sessionId,
         }),
       });
 
       const data = await response.json();
 
+      // Update session ID if backend returns a new one
+      if (data.session_id && data.session_id !== sessionId) {
+        setSessionId(data.session_id);
+        console.log("Session updated:", data.session_id);
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.text, // rendered chat text
+        content: data.text,
         sender: "assistant",
         timestamp: new Date(),
         analysis: {
@@ -102,7 +145,7 @@ export default function Chat() {
           sensitivityLevel: "N/A",
           entities: data.meta.entity ? [data.meta.entity] : [],
         },
-        confidence: undefined, // optional
+        confidence: undefined,
         sources:
           typeof data.meta.docs === "number"
             ? [`${data.meta.docs} source(s) retrieved`]
@@ -140,6 +183,24 @@ export default function Chat() {
     });
   };
 
+  const handleNewSession = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    try {
+      // Delete old session
+      await fetch(`${apiUrl}/session/delete`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      // Reload page to start fresh
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+      // Fallback: just reload
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-full bg-muted/20">
       {/* Header */}
@@ -158,10 +219,27 @@ export default function Chat() {
               </p>
             </div>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            Online
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="gap-1 text-xs font-mono">
+              Chat ID:{" "}
+              {sessionId
+                ? sessionId.substring(0, 20) + "..."
+                : "Initializing..."}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewSession}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              New Session
+            </Button>
+            <Badge variant="outline" className="gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              Online
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -194,7 +272,7 @@ export default function Chat() {
                 )}
               >
                 <CardContent className="p-4">
-                  <div className="text-sm leading-relaxed space-y-2 break-words">
+                  <div className="text-sm leading-relaxed space-y-2 break-words whitespace-pre-wrap">
                     {message.content.split("\n").map((line, idx) => {
                       // First line is always h3
                       if (idx === 0) {
@@ -220,7 +298,6 @@ export default function Chat() {
                         );
                       }
 
-                      // Bullet points
                       if (line.startsWith("• ")) {
                         const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
                         const text = line
@@ -253,7 +330,6 @@ export default function Chat() {
                         );
                       }
 
-                      // Lines with standalone URLs
                       const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
                       if (urlMatch) {
                         const text =
@@ -274,7 +350,6 @@ export default function Chat() {
                         );
                       }
 
-                      // Default paragraph
                       return (
                         <p key={idx} className="break-words">
                           {line}
