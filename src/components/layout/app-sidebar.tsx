@@ -14,12 +14,10 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   const routes = [
-    { name: "Home", path: "/" },
-    { name: "Chat", path: "/chat" },
+    { name: "Chat", path: "/" },
     { name: "Articles", path: "/articles" },
-       { name: "Financials", path: "/financials" },
-    /*     { name: "Client", path: "/clients" },
-    { name: "Alert", path: "/alert" }, */
+    { name: "Financials", path: "/financials" },
+    { name: "Insights", path: "/insights" },
   ];
 
   return (

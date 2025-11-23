@@ -255,14 +255,14 @@ const ArticlesPage: React.FC = () => {
                   variant="outline"
                   className="w-full max-w-md justify-between truncate"
                 >
-                  <span className="truncate">
+                  <span className="truncate capitalize">
                     {selectedPerson || "Select a person"}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
 
               <DropdownMenuContent
-                className="w-[calc(100vw-2rem)] sm:w-full max-w-md p-0"
+                className="w-[calc(100vw-2rem)] sm:w-full max-w-md p-0 capitalize"
                 align="start"
                 sideOffset={4}
                 collisionPadding={16}

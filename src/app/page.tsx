@@ -1,9 +1,9 @@
-import Home from "@/components/page/HomePage/Home";
+import Chat from "@/components/page/ChatPage/Chat";
 
 export default function Page() {
   return (
     <div>
-      <Home />
+      <Chat />
     </div>
   );
 }
