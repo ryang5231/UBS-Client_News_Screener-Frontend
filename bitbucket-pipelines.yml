@@ -4,6 +4,21 @@ options:
   max-time: 30
 
 definitions:
+  caches:
+    node: node_modules
+    
+  steps:
+    - step: &lint
+        name: Lint and Type Check
+        caches:
+          - node
+        script:
+          - npm ci
+          - npm run lint         
+          - npm run type-check   
+          - npm run format:check  
+
+definitions:
   steps:
     - step: &mirror_github
         name: Mirror to GitHub
@@ -21,6 +36,7 @@ definitions:
 pipelines:
   branches:
     main:
+      - step: *lint
       - step: *mirror_github
       - step:
           name: Build & Deploy (Kudu ZIP Deploy)
@@ -30,6 +46,11 @@ pipelines:
           script:
             - apt-get update && apt-get install -y zip unzip
             - npm ci
-            - npm run build
+            - npm run build --if-present
             - cd out && zip -r ../out-deploy.zip . && cd ..
-            - curl -X POST -u "$USER:$PWD" -T out-deploy.zip "https://$PUBLISH_URL/api/zipdeploy"
+            - curl -X POST \
+              -u "$AZURE_USER:$AZURE_PASS" \
+              -T out-deploy.zip \
+              "$AZURE_DEPLOY_URL"
+
+

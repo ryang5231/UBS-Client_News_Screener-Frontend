@@ -17,7 +17,7 @@ export function AppSidebar() {
     { name: "Chat", path: "/" },
     { name: "Articles", path: "/articles" },
     { name: "Financials", path: "/financials" },
-    { name: "Insights", path: "/insights" },
+    { name: "Client Advice History", path: "/insights" },
   ];
 
   return (

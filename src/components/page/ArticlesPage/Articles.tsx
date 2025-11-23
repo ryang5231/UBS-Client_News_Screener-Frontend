@@ -75,7 +75,7 @@ interface Article {
   url: string;
   source: string;
   content: string;
-  publish_date?: string;
+  publish_date?: number;
   id: string;
   summary: Summary;
   similar_articles?: SimilarArticle[];
@@ -85,21 +85,6 @@ interface Article {
 interface HNWIPerson {
   person: string;
 }
-
-// Utility function to format date
-const formatDate = (dateString: string | undefined): string => {
-  if (!dateString) return "N/A";
-
-  try {
-    const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date.toLocaleString("en-US", { month: "short" });
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
-  } catch {
-    return dateString;
-  }
-};
 
 const ArticlesPage: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -230,11 +215,10 @@ const ArticlesPage: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Recent Articles</h1>
-          <p className="text-muted-foreground mt-1">Latest news and articles</p>
+          <h1 className="text-3xl font-bold">Articles</h1>
         </div>
         {selectedPerson && (
-          <Badge variant="outline" className="text-lg px-4 py-2">
+          <Badge variant="outline" className="text-lg px-4 py-2 capitalize">
             {selectedPerson}
           </Badge>
         )}
@@ -422,7 +406,15 @@ const ArticlesPage: React.FC = () => {
                               ` (${article.fact_check.confidence}%)`}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {formatDate(article.publish_date)}
+                            {article.publish_date
+                              ? new Date(
+                                  article.publish_date * 1000,
+                                ).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })
+                              : "No date available"}
                           </span>
                         </div>
 
