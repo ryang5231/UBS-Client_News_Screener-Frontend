@@ -44,15 +44,12 @@ pipelines:
             - rm -rf .next
             - npm ci
             - npm run build
-            # Remove cache before zipping
             - rm -rf .next/cache
             - ls -lh next.config.ts
             - rm -f app.zip
-            # Exclude cache directory from zip
             - zip -r app.zip .next public package.json package-lock.json next.config.ts 2>/dev/null -x ".git/*" "node_modules/*" "*.env*" ".next/cache/*"
             - ls -lh app.zip
             - unzip -l app.zip | head -20
-            # Verify no cache in zip
             - echo "Checking for cache in zip..."
-            - unzip -l app.zip | grep -q "\.next/cache/" && echo "WARNING: Cache found in zip!" || echo "OK: No cache in zip"
+            - unzip -l app.zip | grep "\.next/cache/" || echo "OK - No cache found in zip"
             - curl -v -X POST -u "$AZURE_USER:$AZURE_PASS" -T app.zip "$AZURE_DEPLOY_URL"
