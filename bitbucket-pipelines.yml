@@ -6,7 +6,7 @@ options:
 definitions:
   caches:
     node: node_modules
-    
+
   steps:
     - step: &lint
         name: Lint and Type Check
@@ -14,12 +14,10 @@ definitions:
           - node
         script:
           - npm ci
-          - npm run lint         
-          - npm run type-check   
-          - npm run format:check  
+          - npm run lint
+          - npm run type-check
+          - npm run format:check
 
-definitions:
-  steps:
     - step: &mirror_github
         name: Mirror to GitHub
         script:
@@ -27,9 +25,7 @@ definitions:
           - apt-get update && apt-get install -y git
           - git config --global user.email "ci-bot@bitbucket.org"
           - git config --global user.name "Bitbucket CI Bot"
-          # Add GitHub remote using token auth
           - git remote add github "https://x-access-token:${SEEMA_GITHUB_TOKEN}@${GITHUB_REPO_URL}"
-          # Mirror all branches and tags from Bitbucket to GitHub
           - git push --mirror github
           - echo "[MIRROR] Sync completed!"
 
@@ -52,5 +48,3 @@ pipelines:
               -u "$AZURE_USER:$AZURE_PASS" \
               -T out-deploy.zip \
               "$AZURE_DEPLOY_URL"
-
-

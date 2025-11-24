@@ -1,5 +1,9 @@
 import FinancialsPage from "@/components/page/FinancialsPage/Financials";
 
-export default function Page(){
-    return(<div><FinancialsPage/></div>)
+export default function Page() {
+  return (
+    <div>
+      <FinancialsPage />
+    </div>
+  );
 }
