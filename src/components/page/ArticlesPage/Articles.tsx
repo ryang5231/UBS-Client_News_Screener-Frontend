@@ -704,9 +704,19 @@ const ArticlesPage: React.FC = () => {
                                                 {similar.content_type}
                                               </Badge>
                                               <span className="text-xs text-muted-foreground">
-                                                {formatDate(
-                                                  similar.publish_date,
-                                                )}
+                                                {article.publish_date
+                                                  ? new Date(
+                                                      article.publish_date *
+                                                        1000,
+                                                    ).toLocaleDateString(
+                                                      "en-US",
+                                                      {
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "numeric",
+                                                      },
+                                                    )
+                                                  : "No date available"}
                                               </span>
                                               <span className="text-xs text-muted-foreground">
                                                 {(
