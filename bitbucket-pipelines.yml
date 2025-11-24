@@ -44,16 +44,18 @@ pipelines:
             - npm ci
             - npm run build
             - rm -f app.zip
+            # Create a clean deployment package
             - >
               zip -r app.zip
                 .next
                 public
-                src
                 package.json
                 package-lock.json
                 next.config.js
-                --exclude=node_modules/*
-                --exclude=.git/*
+                -x "*.git*" "*node_modules*" "*.env*"
+            # Verify the zip was created
+            - ls -lh app.zip
+            - unzip -l app.zip | head -20
             - >
               curl -v -X POST
                 -u "$AZURE_USER:$AZURE_PASS"
