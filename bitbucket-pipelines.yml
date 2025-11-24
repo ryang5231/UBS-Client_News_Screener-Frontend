@@ -41,12 +41,11 @@ pipelines:
             - node
           script:
             - apt-get update && apt-get install -y zip unzip
+            - rm -rf .next # ensure fresh build
             - npm ci
             - npm run build
             - rm -f app.zip
-            # Create a clean deployment package
-            - zip -r app.zip .next public package.json package-lock.json next.config.js -x "*.git*" "*/node_modules/*" "*.env*"
-            # Verify the zip was created
+            - zip -r app.zip .next public package.json package-lock.json next.config.js -x ".git/*" "node_modules/*" "*.env*"
             - ls -lh app.zip
             - unzip -l app.zip | head -20
             - curl -v -X POST -u "$AZURE_USER:$AZURE_PASS" -T app.zip "$AZURE_DEPLOY_URL"
