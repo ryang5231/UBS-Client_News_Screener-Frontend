@@ -44,19 +44,19 @@ pipelines:
             - npm ci
             - npm run build
             - rm -f app.zip
-            # zip EVERYTHING needed for Next.js runtime
-            - zip -r app.zip \
-                .next \
-                public \
-                src \
-                package.json \
-                package-lock.json \
-                next.config.js \
-                --exclude=node_modules/\* \
-                --exclude=.git/\*
+            - >
+              zip -r app.zip
+                .next
+                public
+                src
+                package.json
+                package-lock.json
+                next.config.js
+                --exclude=node_modules/*
+                --exclude=.git/*
             - >
               curl -v -X POST
-              -u "$AZURE_USER:$AZURE_PASS"
-              -T app.zip
-              "$AZURE_DEPLOY_URL"
+                -u "$AZURE_USER:$AZURE_PASS"
+                -T app.zip
+                "$AZURE_DEPLOY_URL"
 
