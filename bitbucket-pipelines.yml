@@ -49,8 +49,4 @@ pipelines:
             # Verify the zip was created
             - ls -lh app.zip
             - unzip -l app.zip | head -20
-            - >
-              curl -v -X POST
-                -u "$AZURE_USER:$AZURE_PASS"
-                -T app.zip
-                "$AZURE_DEPLOY_URL"
+            - curl -v -X POST -u "$AZURE_USER:$AZURE_PASS" -T app.zip "$AZURE_DEPLOY_URL"
