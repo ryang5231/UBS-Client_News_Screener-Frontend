@@ -1304,6 +1304,7 @@ export default function Chat() {
           intent: metaData.intent,
           entity: metaData.entity,
           since_days: metaData.since_days,
+          are_articles_recent: textData.meta?.are_articles_recent || false,
           articles: textData.articles || [],
           advice: textData.advice || null,
           advice_list: textData.advice_list || [],
@@ -1328,7 +1329,10 @@ export default function Chat() {
         agentUsed: "orchestrator",
         requiresEscalation: metaData.needs_clarification,
       };
-
+      console.log(
+        "Assistant message:",
+        assistantMessage.meta?.are_articles_recent,
+      );
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error sending message:", error);

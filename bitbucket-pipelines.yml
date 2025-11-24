@@ -42,14 +42,16 @@ pipelines:
           script:
             - apt-get update && apt-get install -y zip unzip
             - rm -rf .next
+            - rm -rf out-deploy.zip
+            - rm -rf out
             - npm ci
             - npm run build
             - rm -rf .next/cache
             - ls -lh next.config.ts
-            - rm -f app.zip
-            - zip -r app.zip .next public package.json package-lock.json next.config.ts 2>/dev/null -x ".git/*" "node_modules/*" "*.env*" ".next/cache/*"
-            - ls -lh app.zip
-            - unzip -l app.zip | head -20
+            - rm -f out-deploy.zip
+            - zip -r out-deploy.zip .next public package.json package-lock.json next.config.ts 2>/dev/null -x ".git/*" "node_modules/*" "*.env*" ".next/cache/*"
+            - ls -lh out-deploy.zip
+            - unzip -l out-deploy.zip | head -20
             - echo "Checking for cache in zip..."
-            - unzip -l app.zip | grep "\.next/cache/" || echo "OK - No cache found in zip"
-            - curl -v -X POST -u "$AZURE_USER:$AZURE_PASS" -T app.zip "$AZURE_DEPLOY_URL"
+            - unzip -l out-deploy.zip | grep "\.next/cache/" || echo "OK - No cache found in zip"
+            - curl -v -X POST -u "$AZURE_USER:$AZURE_PASS" -T out-deploy.zip "$AZURE_DEPLOY_URL"
