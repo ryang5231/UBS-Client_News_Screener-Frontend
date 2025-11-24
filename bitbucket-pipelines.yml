@@ -42,10 +42,11 @@ pipelines:
           script:
             - apt-get update && apt-get install -y zip unzip
             - npm ci
-            - npm run build --if-present
-            - cd out && zip -r ../out-deploy.zip . && cd ..
+            - npm run build
+            - rm -f app.zip
+            - zip -r app.zip .next public package.json next.config.js
             - >
               curl -v -X POST
               -u "$AZURE_USER:$AZURE_PASS"
-              -T out-deploy.zip
+              -T app.zip
               "$AZURE_DEPLOY_URL"
