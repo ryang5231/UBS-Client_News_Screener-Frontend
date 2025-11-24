@@ -59,4 +59,3 @@ pipelines:
                 -u "$AZURE_USER:$AZURE_PASS"
                 -T app.zip
                 "$AZURE_DEPLOY_URL"
-
