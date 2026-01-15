@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/app/context/ChatContext";
+import { Message, Doc, AdvisoryBubbleProps, AdvisoryData } from "@/types/index";
 import {
   Send,
   AlertCircle,
@@ -23,6 +24,8 @@ import {
   BarChart3,
   Info,
   CheckCircle,
+  Check,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -31,146 +34,6 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@radix-ui/react-accordion";
-
-interface Article {
-  title: string;
-  url: string;
-  source: string;
-  publish_date?: number;
-  summary: {
-    summary_text: string;
-    sentiment: {
-      overall: string;
-      confidence: number;
-    };
-    topics?: string[];
-    financial_impact: {
-      has_impact: boolean;
-      affected_companies: string[];
-      impact_type: string;
-    };
-  };
-  similar_articles?: {
-    content_type: string;
-    id: string;
-    publish_date: string;
-    similarity: number;
-    title: string;
-    url?: string;
-  }[];
-  fact_check?: {
-    actionable_insight: string;
-    confidence: number;
-    evidence: string;
-    status: string;
-  };
-}
-
-interface FinancialData {
-  symbol: string;
-  fiscal_year: string;
-  financials: {
-    revenue: string;
-    net_income: string;
-    total_assets: string;
-  };
-  formatted: {
-    revenue: string;
-    net_income: string;
-    total_assets: string;
-  };
-  meta: {
-    timestamp: string;
-    currency: string;
-  };
-}
-interface Message {
-  id: string;
-  content: string;
-  sender: "user" | "assistant";
-  timestamp: Date;
-  meta?: {
-    intent?: string;
-    entity?: string;
-    are_articles_recent?: boolean;
-    since_days?: number;
-    articles?: Article[];
-    advice?: AdvisoryData;
-    advice_list?: AdvisoryData[];
-    financial_data?: FinancialData;
-    signals?: {
-      articles_considered: Array<{
-        id: string;
-        title: string;
-        url: string;
-      }>;
-    };
-    docs?: number;
-    has_summary?: boolean;
-    needs_clarification?: boolean;
-  };
-  confidence?: number;
-  sources?: string[];
-  compliance?: boolean;
-  agentUsed?: string;
-  requiresEscalation?: boolean;
-  analysis?: {
-    intent: string;
-    sensitivityLevel: string;
-    entities: string[];
-  };
-}
-
-interface AdvisoryData {
-  entity_name: string;
-  advice: {
-    "Basic Profile": {
-      Background: { value: string };
-      "Public Sentiment": { value: string };
-    };
-    "Financial Profile": {
-      "Net Worth": {
-        value: string;
-        sources: string[];
-      };
-      Portfolio?: {
-        value: string;
-        sources: string[];
-      };
-
-      "Investment Activeness": {
-        value: string;
-        sources: string[];
-      };
-    };
-    Associations: {
-      "Companies Brands": string[];
-      Individuals: string[];
-      Sources: string[];
-    };
-    "Risk Assessment": {
-      "Reputational Risk": {
-        rating: number;
-        justification: string[];
-      };
-      "Illegal Activity Risk": {
-        rating: number;
-        justification: string[];
-      };
-      Controversies: string[];
-    };
-    "Suitability Analysis": {
-      "Overall Rating": number;
-      "Service Usage Likelihood": number;
-      Justification: string[];
-    };
-  };
-}
-
-interface Doc {
-  url: string;
-  title?: string;
-}
 
 function BubbleTimestamp({ timestamp }: { timestamp?: string | Date }) {
   if (!timestamp) return null;
@@ -450,15 +313,18 @@ function NewsLookupBubble({ message }: { message: Message }) {
 }
 
 // Advisory Bubble Component
-function AdvisoryBubble({
-  message,
-  onApprove,
-}: {
-  message: Message;
-  onApprove?: (event: React.MouseEvent<HTMLButtonElement>) => void;
-}) {
+function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
   const advisory = message.meta?.advice;
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
   if (!advisory) return <DefaultMessageBubble message={message} />;
+
+  {
+    /** track decision of bubble to control button clickability
+     * => Save:    grey out when decision == approve
+     * => Edit:    all buttons enabled, EXCEPT when other buttons have alr been clicked
+     */
+  }
+  const disableSave = message.meta?.decision !== undefined;
 
   const entityName = advisory.entity_name;
   const advice = advisory.advice;
@@ -481,6 +347,20 @@ function AdvisoryBubble({
     return "bg-rose-50 text-rose-700 border-rose-200";
   };
 
+  const handleButtonClick = async (action: "save" | "edit") => {
+    if (loadingAction) return; // Prevent double clicks
+
+    setLoadingAction(action);
+    try {
+      // Call the parent function
+      await onDecision(action, advisory);
+    } catch (error) {
+      console.error("Action failed", error);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <Card className="max-w-[90%]">
       <CardContent className="p-6">
@@ -497,7 +377,7 @@ function AdvisoryBubble({
               <p className="text-sm text-gray-600 mt-0.5">{entityName}</p>
               {message.meta?.intent === "hitl" && (
                 <p className="text-xs text-amber-600 mt-1 italic">
-                  Advisory re-evaluated with latest information
+                  Advice on {message.meta?.entity} re-evaluated
                 </p>
               )}
             </div>
@@ -854,13 +734,33 @@ function AdvisoryBubble({
               days
             </div>
           )}
-          <Button
-            onClick={onApprove}
-            className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-          >
-            Save Advice
-          </Button>
+          <div className="flex items-center gap-2">
+            Would you like to save this advice for later reference?&nbsp;
+            <Button
+              onClick={() => handleButtonClick("save")}
+              disabled={!!loadingAction || disableSave}
+              className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer w-8 h-8"
+            >
+              {loadingAction === "save" ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+            </Button>
+            <Button
+              onClick={() => handleButtonClick("edit")}
+              disabled={!!loadingAction}
+              className="ml-auto bg-yellow-600 hover:bg-yellow-700 text-white cursor-pointer w-8 h-8"
+            >
+              {loadingAction === "edit" ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Pencil className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
         </div>
+        <BubbleTimestamp timestamp={message.timestamp} />
       </CardContent>
     </Card>
   );
@@ -969,6 +869,7 @@ function DefaultMessageBubble({ message }: { message: Message }) {
             )}
           </div>
         )}
+        <BubbleTimestamp timestamp={message.timestamp} />
       </CardContent>
     </Card>
   );
@@ -1054,6 +955,7 @@ export function FinancialLookupBubble({ message }: { message: Message }) {
             {new Date(financialData?.meta?.timestamp).toLocaleString()}
           </div>
         )}
+        <BubbleTimestamp timestamp={message.timestamp} />
       </CardContent>
     </Card>
   );
@@ -1166,6 +1068,7 @@ export function OverviewBubble({ message }: { message: Message }) {
                   </div>
                 </div>
               )}
+              <BubbleTimestamp timestamp={message.timestamp} />
             </CardContent>
           </Card>
         );
@@ -1177,10 +1080,14 @@ export function OverviewBubble({ message }: { message: Message }) {
 // Main component to render the appropriate bubble based on intent
 function AssistantMessageBubble({
   message,
-  onSendMessage,
+  onAdvisoryDecision,
 }: {
   message: Message;
-  onSendMessage: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onAdvisoryDecision: (
+    messageId: string,
+    action: "save" | "edit",
+    adviceData: AdvisoryData,
+  ) => Promise<void>;
 }) {
   const intent = message.meta?.intent;
 
@@ -1189,7 +1096,14 @@ function AssistantMessageBubble({
       return <NewsLookupBubble message={message} />;
     case "advisory_query":
     case "hitl":
-      return <AdvisoryBubble message={message} onApprove={onSendMessage} />;
+      return (
+        <AdvisoryBubble
+          message={message}
+          onDecision={(action, adviceData) =>
+            onAdvisoryDecision(message.id, action, adviceData)
+          }
+        />
+      );
     case "overview":
       return <OverviewBubble message={message} />;
     case "financial_lookup":
@@ -1210,14 +1124,6 @@ export default function Chat() {
   } = useChat();
 
   const [inputValue, setInputValue] = useState("");
-  const [pendingApprove, setPendingApprove] = useState(false);
-
-  useEffect(() => {
-    if (pendingApprove && inputValue === "approve") {
-      handleSendMessage();
-      setPendingApprove(false);
-    }
-  }, [inputValue, pendingApprove]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -1251,6 +1157,59 @@ export default function Chat() {
 
     initSession();
   }, []);
+
+  // Handler for direct backend actions
+  const handleAdvisoryDecision = async (
+    messageId: string,
+    action: "save" | "edit",
+    adviceData: AdvisoryData,
+  ) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    // Immediately update UI to lock the buttons (Optimistic Update)
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) =>
+        msg.id === messageId && msg.meta
+          ? { ...msg, meta: { ...msg.meta, decision: action } }
+          : msg,
+      ),
+    );
+
+    try {
+      const response = await fetch(`${apiUrl}/advisory/decision`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          action: action,
+          entity: adviceData.entity_name,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        // Option A: If backend returns a new chat message confirming logic
+        // const data = await response.json();
+        // Handle data similar to handleSendMessage if the backend returns a text response
+
+        // Option B: Manually add a success message locally
+        const successMessage: Message = {
+          id: Date.now().toString(),
+          content: `Successfully recorded decision: **${action.toUpperCase()}** for ${adviceData.entity_name}.`,
+          sender: "assistant",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, successMessage]);
+      } else {
+        console.error("Backend returned error");
+      }
+    } catch (error) {
+      console.error("Failed to send decision:", error);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -1452,10 +1411,7 @@ export default function Chat() {
               ) : (
                 <AssistantMessageBubble
                   message={message}
-                  onSendMessage={() => {
-                    setInputValue("approve");
-                    setPendingApprove(true);
-                  }}
+                  onAdvisoryDecision={handleAdvisoryDecision}
                 />
               )}
 
