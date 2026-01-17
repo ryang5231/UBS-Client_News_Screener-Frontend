@@ -1,3 +1,5 @@
+import { UUID } from "crypto";
+
 export interface Message {
   id: string;
   content: string;
@@ -43,7 +45,13 @@ export interface Doc {
 
 export interface AdvisoryBubbleProps {
   message: Message;
-  onDecision: (action: "save" | "edit", data: AdvisoryData) => Promise<void>;
+  onDecision: (
+    action: "save" | "edit",
+    entityName: string,
+    insightId: string,
+    editInstruction: string | null,
+    adviceTimestamp: Date,
+  ) => Promise<void>;
 }
 
 export interface Article {
@@ -100,6 +108,7 @@ export interface FinancialData {
 }
 
 export interface AdvisoryData {
+  id: string;
   entity_name: string;
   advice: {
     "Basic Profile": {

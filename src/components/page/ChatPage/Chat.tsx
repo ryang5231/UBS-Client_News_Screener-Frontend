@@ -26,6 +26,7 @@ import {
   CheckCircle,
   Check,
   Pencil,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -316,6 +317,8 @@ function NewsLookupBubble({ message }: { message: Message }) {
 function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
   const advisory = message.meta?.advice;
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
   if (!advisory) return <DefaultMessageBubble message={message} />;
 
   {
@@ -324,7 +327,8 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
      * => Edit:    all buttons enabled, EXCEPT when other buttons have alr been clicked
      */
   }
-  const disableSave = message.meta?.decision !== undefined;
+  // const disableSave = message.meta?.decision !== undefined || isEditing;
+  const disableSave = false;
 
   const entityName = advisory.entity_name;
   const advice = advisory.advice;
@@ -347,15 +351,44 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
     return "bg-rose-50 text-rose-700 border-rose-200";
   };
 
-  const handleButtonClick = async (action: "save" | "edit") => {
+  const onSubmitEdit = () => {
+    const cleanedInstruction = editInstruction?.trim();
+    if (cleanedInstruction) {
+      handleButtonClick("edit", cleanedInstruction);
+    }
+    setIsEditing(false);
+  };
+
+  const handleButtonClick = async (
+    action: "save" | "edit",
+    editInstruction: string | null = null,
+  ) => {
     if (loadingAction) return; // Prevent double clicks
 
     setLoadingAction(action);
     try {
-      // Call the parent function
-      await onDecision(action, advisory);
+      if (
+        (action === "save" && editInstruction) ||
+        (action === "edit" && !editInstruction?.trim())
+      ) {
+        throw new Error(
+          "Malformed request. Saving should not have editInstruction, while the converse for editing.",
+        );
+      }
+      await onDecision(
+        action,
+        advisory.id,
+        entityName,
+        editInstruction,
+        message.timestamp,
+      );
     } catch (error) {
-      console.error("Action failed", error);
+      if (error instanceof Error) {
+        // TypeScript now knows 'error' has a 'message' property
+        console.error("Action failed:", error.message);
+      } else {
+        console.error("An unexpected error occurred", error);
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -364,7 +397,7 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
   return (
     <Card className="max-w-[90%]">
       <CardContent className="p-6">
-        {/* Header */}
+        {/* 1. Header */}
         <div className="flex items-start justify-between mb-6 pb-5 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-50 rounded-lg">
@@ -384,7 +417,7 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
           </div>
         </div>
 
-        {/* Overall Suitability - Hero Section */}
+        {/* 2. Overall Suitability - Hero Section */}
         <div className="mb-6 p-5 bg-gradient-to-br rounded-xl border">
           <div className="flex items-start justify-between gap-4 mb-3">
             <div>
@@ -425,7 +458,7 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
           </div>
         </div>
 
-        {/* Accordion for detailed sections */}
+        {/* 3. Accordion for detailed sections */}
         <Accordion type="multiple" className="space-y-3">
           {/* Basic Profile */}
           <AccordionItem value="financial" className="border rounded-lg px-4">
@@ -723,44 +756,104 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
           )}
         </Accordion>
 
-        {/* Footer */}
-        <div className="mt-6 pt-5 border-t flex justify-between items-center">
-          {message.meta?.since_days && (
-            <div className="text-xs text-gray-500 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Analysis based on data from the last {
-                message.meta.since_days
-              }{" "}
-              days
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            Would you like to save this advice for later reference?&nbsp;
-            <Button
-              onClick={() => handleButtonClick("save")}
-              disabled={!!loadingAction || disableSave}
-              className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer w-8 h-8"
-            >
-              {loadingAction === "save" ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" />
+        {/* 4. Save/Edit Button area */}
+        <div className="mt-6 pt-5 flex">
+          <div className="flex w-full items-center justify-between gap-10">
+            {/* 1. The Text */}
+            <span className="flex-1">
+              Would you like to save this advice for later reference?
+            </span>
+
+            {/* 2. The Button Group (Wrapped to stay together) */}
+            <div className="flex gap-2 shrink-0">
+              {!isEditing && (
+                <Button
+                  onClick={() => handleButtonClick("save")}
+                  disabled={!!loadingAction || disableSave}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white w-9 h-9"
+                >
+                  {loadingAction === "save" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                </Button>
               )}
-            </Button>
-            <Button
-              onClick={() => handleButtonClick("edit")}
-              disabled={!!loadingAction}
-              className="ml-auto bg-yellow-600 hover:bg-yellow-700 text-white cursor-pointer w-8 h-8"
-            >
-              {loadingAction === "edit" ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
+
+              {isEditing && (
+                <Button
+                  onClick={() => setIsEditing(false)}
+                  disabled={!!loadingAction}
+                  className="bg-red-600 hover:bg-red-700 text-white w-9 h-9"
+                >
+                  {loadingAction === "save" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowLeft className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
+
+              <Button
+                onClick={() => setIsEditing(true)}
+                disabled={!!loadingAction || isEditing}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white w-9 h-9 p-0"
+              >
                 <Pencil className="w-4 h-4" />
-              )}
-            </Button>
+              </Button>
+            </div>
           </div>
         </div>
-        <BubbleTimestamp timestamp={message.timestamp} />
+
+        {/* 5. Edit Input Area */}
+        {isEditing && (
+          <div className="flex gap-2 mt-4">
+            <Input
+              value={editInstruction}
+              onChange={(e) => setEditInstruction(e.target.value)}
+              placeholder="E.g., The risk assessment is too conservative..."
+              className="flex-1 text-base"
+              onKeyDown={(e) =>
+                e.key === "Enter" && !e.shiftKey && onSubmitEdit()
+              }
+              disabled={!!loadingAction}
+            />
+            <Button
+              onClick={onSubmitEdit}
+              size="lg"
+              className="w-9 h-9"
+              disabled={!!loadingAction || !editInstruction.trim()}
+            >
+              <Send className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* 6. Footer */}
+        <div className="mt-2 pt-5 flex justify-between items-center text-xs text-gray-500">
+          {message.meta?.since_days ? (
+            <>
+              {/* Left Side: Analysis Info */}
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>
+                  Analysis based on data from the last {message.meta.since_days}{" "}
+                  days
+                </span>
+              </div>
+
+              {/* Right Side: Timestamp */}
+              <div className="shrink-0">
+                <BubbleTimestamp timestamp={message.timestamp} />
+              </div>
+            </>
+          ) : (
+            /* Fallback if since_days is missing: Push timestamp to the right */
+            <div className="ml-auto">
+              <BubbleTimestamp timestamp={message.timestamp} />
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1086,7 +1179,10 @@ function AssistantMessageBubble({
   onAdvisoryDecision: (
     messageId: string,
     action: "save" | "edit",
-    adviceData: AdvisoryData,
+    insightId: string,
+    entityName: string,
+    editInstruction: string | null,
+    adviceTimeStamp: Date,
   ) => Promise<void>;
 }) {
   const intent = message.meta?.intent;
@@ -1099,8 +1195,21 @@ function AssistantMessageBubble({
       return (
         <AdvisoryBubble
           message={message}
-          onDecision={(action, adviceData) =>
-            onAdvisoryDecision(message.id, action, adviceData)
+          onDecision={(
+            action,
+            insightId,
+            entityName,
+            editInstruction,
+            adviceTimeStamp,
+          ) =>
+            onAdvisoryDecision(
+              message.id,
+              action,
+              insightId,
+              entityName,
+              editInstruction,
+              adviceTimeStamp,
+            )
           }
         />
       );
@@ -1162,11 +1271,17 @@ export default function Chat() {
   const handleAdvisoryDecision = async (
     messageId: string,
     action: "save" | "edit",
-    adviceData: AdvisoryData,
+    insightId: string,
+    entityName: string,
+    editInstruction: string | null,
+    adviceTimeStamp: Date,
   ) => {
+    // 1. Set Loading to disable inputs during processing
+    setIsLoading(true);
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-    // Immediately update UI to lock the buttons (Optimistic Update)
+    // Optimistically update the previous bubble to show the decision was made
     setMessages((prevMessages) =>
       prevMessages.map((msg) =>
         msg.id === messageId && msg.meta
@@ -1176,6 +1291,28 @@ export default function Chat() {
     );
 
     try {
+      const formattedTime = new Date(adviceTimeStamp).toLocaleTimeString(
+        "en-US",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        },
+      );
+
+      let formattedAction = "";
+      if (action === "edit") formattedAction = "rerun";
+      else if (action == "save") formattedAction = action;
+
+      console.log(
+        JSON.stringify({
+          session_id: sessionId,
+          action: formattedAction,
+          target_insight_id: insightId,
+          edit_instruction: editInstruction,
+        }),
+      );
+
       const response = await fetch(`${apiUrl}/advisory/decision`, {
         method: "POST",
         credentials: "include",
@@ -1184,30 +1321,97 @@ export default function Chat() {
         },
         body: JSON.stringify({
           session_id: sessionId,
-          action: action,
-          entity: adviceData.entity_name,
-          timestamp: new Date().toISOString(),
+          action: formattedAction,
+          target_insight_id: insightId,
+          edit_instruction: editInstruction,
         }),
       });
 
-      if (response.ok) {
-        // Option A: If backend returns a new chat message confirming logic
-        // const data = await response.json();
-        // Handle data similar to handleSendMessage if the backend returns a text response
+      // 2. Parse the JSON once, so we can use it for both success and error blocks
+      const data = await response.json();
 
-        // Option B: Manually add a success message locally
-        const successMessage: Message = {
+      if (response.ok) {
+        // --- SCENARIO A: SAVE ---
+        if (formattedAction === "save") {
+          const successMessage: Message = {
+            id: Date.now().toString(),
+            content: `Saved ${formattedTime} advice on ${entityName} successfully! You can view it via the side panel, under "Client Advice History".`,
+            sender: "assistant",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, successMessage]);
+        }
+
+        // --- SCENARIO B: EDIT (RERUN) ---
+        else if (formattedAction === "rerun") {
+          // Extract data similar to handleSendMessage logic
+          const textData = data.text || {};
+          const metaData = data.meta || {};
+          console.log(metaData);
+
+          // Construct the new Assistant Message with the updated advice
+          const newAdvisoryMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content:
+              typeof textData === "string"
+                ? textData
+                : textData.text ||
+                  textData.message ||
+                  "Here is the updated advice based on your instructions.",
+            sender: "assistant",
+            timestamp: new Date(),
+            meta: {
+              intent: metaData.intent || "hitl", // Ensure intent triggers AdvisoryBubble
+              entity: metaData.entity,
+              since_days: metaData.since_days,
+              are_articles_recent: textData.meta?.are_articles_recent || false,
+              articles: textData.articles || [],
+              advice: textData.advice || null, // <--- This contains the NEW advice
+              advice_list: textData.advice_list || [],
+              financial_data: textData.financial_data || [],
+              docs: metaData.docs,
+              has_summary: metaData.has_summary,
+              needs_clarification: metaData.needs_clarification,
+              signals: metaData.signals || [],
+            },
+            analysis: {
+              intent: metaData.intent || "hitl",
+              sensitivityLevel: "N/A",
+              entities: metaData.entity ? [metaData.entity] : [],
+            },
+            sources:
+              typeof metaData.docs === "number"
+                ? [`${metaData.docs} source(s) retrieved`]
+                : Array.isArray(metaData.docs)
+                  ? metaData.docs.map((d: Doc) => d.url).filter(Boolean)
+                  : [],
+            agentUsed: "orchestrator",
+          };
+
+          // Append the new bubble to the chat
+          setMessages((prev) => [...prev, newAdvisoryMessage]);
+        }
+      } else {
+        // --- SCENARIO C: ERROR ---
+        const errorDetail = JSON.stringify(
+          data.detail || "Unknown error",
+          null,
+          2,
+        );
+        const failureMessage: Message = {
           id: Date.now().toString(),
-          content: `Successfully recorded decision: **${action.toUpperCase()}** for ${adviceData.entity_name}.`,
+          content: `Failed to process request for ${entityName}. Error: ${errorDetail}`,
           sender: "assistant",
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, successMessage]);
-      } else {
-        console.error("Backend returned error");
+        setMessages((prev) => [...prev, failureMessage]);
       }
     } catch (error) {
       console.error("Failed to send decision:", error);
+      // Optional: Add a UI error message here as well
+    } finally {
+      // 3. Ensure loading state is turned off
+      setIsLoading(false);
     }
   };
 
