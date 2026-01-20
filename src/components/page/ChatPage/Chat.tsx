@@ -327,8 +327,8 @@ function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
      * => Edit:    all buttons enabled, EXCEPT when other buttons have alr been clicked
      */
   }
-  // const disableSave = message.meta?.decision !== undefined || isEditing;
-  const disableSave = false;
+  const disableSave = message.meta?.decision !== undefined || isEditing;
+  // const disableSave = false;
 
   const entityName = advisory.entity_name;
   const advice = advisory.advice;
@@ -1044,7 +1044,7 @@ export function FinancialLookupBubble({ message }: { message: Message }) {
         {financialData?.meta?.timestamp && (
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            Data as of x
+            Data as of&nbsp;
             {new Date(financialData?.meta?.timestamp).toLocaleString()}
           </div>
         )}

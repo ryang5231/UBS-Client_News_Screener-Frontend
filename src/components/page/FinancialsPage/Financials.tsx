@@ -155,6 +155,8 @@ const FinancialsPage: React.FC = () => {
     );
   }
 
+  // console.log(data);
+
   const history = data?.earnings_estimates?.history || [];
   const historyToShow = showFullHistory ? history : history.slice(0, 5);
 
