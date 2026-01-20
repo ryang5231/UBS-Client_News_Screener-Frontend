@@ -100,12 +100,12 @@ const formatDate = (dateString: string | undefined): string => {
   if (!dateString) return "N/A";
 
   try {
-    // Remove double timezone: `+00:00Z` -> `Z`
-    const cleaned = dateString.replace(/\+00:00Z$/, "Z");
+    // 1. Parse the date directly. JS handles the "+00:00" offset automatically.
+    const date = new Date(dateString);
 
-    const date = new Date(cleaned);
     if (isNaN(date.getTime())) return "N/A";
 
+    // 2. Format specifically for GMT+8
     return date.toLocaleString("en-US", {
       year: "numeric",
       month: "short",
@@ -113,9 +113,10 @@ const formatDate = (dateString: string | undefined): string => {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-      timeZone: "UTC",
+      timeZone: "Asia/Singapore", // This enforces GMT+8
     });
-  } catch {
+  } catch (error) {
+    console.error("Date formatting error:", error);
     return dateString;
   }
 };

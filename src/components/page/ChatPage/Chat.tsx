@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/app/context/ChatContext";
+import { Message, Doc, AdvisoryBubbleProps, AdvisoryData } from "@/types/index";
 import {
   Send,
   AlertCircle,
@@ -23,6 +24,9 @@ import {
   BarChart3,
   Info,
   CheckCircle,
+  Check,
+  Pencil,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -31,146 +35,6 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@radix-ui/react-accordion";
-
-interface Article {
-  title: string;
-  url: string;
-  source: string;
-  publish_date?: number;
-  summary: {
-    summary_text: string;
-    sentiment: {
-      overall: string;
-      confidence: number;
-    };
-    topics?: string[];
-    financial_impact: {
-      has_impact: boolean;
-      affected_companies: string[];
-      impact_type: string;
-    };
-  };
-  similar_articles?: {
-    content_type: string;
-    id: string;
-    publish_date: string;
-    similarity: number;
-    title: string;
-    url?: string;
-  }[];
-  fact_check?: {
-    actionable_insight: string;
-    confidence: number;
-    evidence: string;
-    status: string;
-  };
-}
-
-interface FinancialData {
-  symbol: string;
-  fiscal_year: string;
-  financials: {
-    revenue: string;
-    net_income: string;
-    total_assets: string;
-  };
-  formatted: {
-    revenue: string;
-    net_income: string;
-    total_assets: string;
-  };
-  meta: {
-    timestamp: string;
-    currency: string;
-  };
-}
-interface Message {
-  id: string;
-  content: string;
-  sender: "user" | "assistant";
-  timestamp: Date;
-  meta?: {
-    intent?: string;
-    entity?: string;
-    are_articles_recent?: boolean;
-    since_days?: number;
-    articles?: Article[];
-    advice?: AdvisoryData;
-    advice_list?: AdvisoryData[];
-    financial_data?: FinancialData;
-    signals?: {
-      articles_considered: Array<{
-        id: string;
-        title: string;
-        url: string;
-      }>;
-    };
-    docs?: number;
-    has_summary?: boolean;
-    needs_clarification?: boolean;
-  };
-  confidence?: number;
-  sources?: string[];
-  compliance?: boolean;
-  agentUsed?: string;
-  requiresEscalation?: boolean;
-  analysis?: {
-    intent: string;
-    sensitivityLevel: string;
-    entities: string[];
-  };
-}
-
-interface AdvisoryData {
-  entity_name: string;
-  advice: {
-    "Basic Profile": {
-      Background: { value: string };
-      "Public Sentiment": { value: string };
-    };
-    "Financial Profile": {
-      "Net Worth": {
-        value: string;
-        sources: string[];
-      };
-      Portfolio?: {
-        value: string;
-        sources: string[];
-      };
-
-      "Investment Activeness": {
-        value: string;
-        sources: string[];
-      };
-    };
-    Associations: {
-      "Companies Brands": string[];
-      Individuals: string[];
-      Sources: string[];
-    };
-    "Risk Assessment": {
-      "Reputational Risk": {
-        rating: number;
-        justification: string[];
-      };
-      "Illegal Activity Risk": {
-        rating: number;
-        justification: string[];
-      };
-      Controversies: string[];
-    };
-    "Suitability Analysis": {
-      "Overall Rating": number;
-      "Service Usage Likelihood": number;
-      Justification: string[];
-    };
-  };
-}
-
-interface Doc {
-  url: string;
-  title?: string;
-}
 
 function BubbleTimestamp({ timestamp }: { timestamp?: string | Date }) {
   if (!timestamp) return null;
@@ -450,15 +314,21 @@ function NewsLookupBubble({ message }: { message: Message }) {
 }
 
 // Advisory Bubble Component
-function AdvisoryBubble({
-  message,
-  onApprove,
-}: {
-  message: Message;
-  onApprove?: (event: React.MouseEvent<HTMLButtonElement>) => void;
-}) {
+function AdvisoryBubble({ message, onDecision }: AdvisoryBubbleProps) {
   const advisory = message.meta?.advice;
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
   if (!advisory) return <DefaultMessageBubble message={message} />;
+
+  {
+    /** track decision of bubble to control button clickability
+     * => Save:    grey out when decision == approve
+     * => Edit:    all buttons enabled, EXCEPT when other buttons have alr been clicked
+     */
+  }
+  const disableSave = message.meta?.decision !== undefined || isEditing;
+  // const disableSave = false;
 
   const entityName = advisory.entity_name;
   const advice = advisory.advice;
@@ -481,10 +351,53 @@ function AdvisoryBubble({
     return "bg-rose-50 text-rose-700 border-rose-200";
   };
 
+  const onSubmitEdit = () => {
+    const cleanedInstruction = editInstruction?.trim();
+    if (cleanedInstruction) {
+      handleButtonClick("edit", cleanedInstruction);
+    }
+    setIsEditing(false);
+  };
+
+  const handleButtonClick = async (
+    action: "save" | "edit",
+    editInstruction: string | null = null,
+  ) => {
+    if (loadingAction) return; // Prevent double clicks
+
+    setLoadingAction(action);
+    try {
+      if (
+        (action === "save" && editInstruction) ||
+        (action === "edit" && !editInstruction?.trim())
+      ) {
+        throw new Error(
+          "Malformed request. Saving should not have editInstruction, while the converse for editing.",
+        );
+      }
+      await onDecision(
+        action,
+        advisory.id,
+        entityName,
+        editInstruction,
+        message.timestamp,
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        // TypeScript now knows 'error' has a 'message' property
+        console.error("Action failed:", error.message);
+      } else {
+        console.error("An unexpected error occurred", error);
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <Card className="max-w-[90%]">
       <CardContent className="p-6">
-        {/* Header */}
+        {/* 1. Header */}
         <div className="flex items-start justify-between mb-6 pb-5 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-50 rounded-lg">
@@ -497,14 +410,14 @@ function AdvisoryBubble({
               <p className="text-sm text-gray-600 mt-0.5">{entityName}</p>
               {message.meta?.intent === "hitl" && (
                 <p className="text-xs text-amber-600 mt-1 italic">
-                  Advisory re-evaluated with latest information
+                  Advice on {message.meta?.entity} re-evaluated
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Overall Suitability - Hero Section */}
+        {/* 2. Overall Suitability - Hero Section */}
         <div className="mb-6 p-5 bg-gradient-to-br rounded-xl border">
           <div className="flex items-start justify-between gap-4 mb-3">
             <div>
@@ -545,7 +458,7 @@ function AdvisoryBubble({
           </div>
         </div>
 
-        {/* Accordion for detailed sections */}
+        {/* 3. Accordion for detailed sections */}
         <Accordion type="multiple" className="space-y-3">
           {/* Basic Profile */}
           <AccordionItem value="financial" className="border rounded-lg px-4">
@@ -843,23 +756,103 @@ function AdvisoryBubble({
           )}
         </Accordion>
 
-        {/* Footer */}
-        <div className="mt-6 pt-5 border-t flex justify-between items-center">
-          {message.meta?.since_days && (
-            <div className="text-xs text-gray-500 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Analysis based on data from the last {
-                message.meta.since_days
-              }{" "}
-              days
+        {/* 4. Save/Edit Button area */}
+        <div className="mt-6 pt-5 flex">
+          <div className="flex w-full items-center justify-between gap-10">
+            {/* 1. The Text */}
+            <span className="flex-1">
+              Would you like to save this advice for later reference?
+            </span>
+
+            {/* 2. The Button Group (Wrapped to stay together) */}
+            <div className="flex gap-2 shrink-0">
+              {!isEditing && (
+                <Button
+                  onClick={() => handleButtonClick("save")}
+                  disabled={!!loadingAction || disableSave}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white w-9 h-9"
+                >
+                  {loadingAction === "save" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
+
+              {isEditing && (
+                <Button
+                  onClick={() => setIsEditing(false)}
+                  disabled={!!loadingAction}
+                  className="bg-red-600 hover:bg-red-700 text-white w-9 h-9"
+                >
+                  {loadingAction === "save" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowLeft className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
+
+              <Button
+                onClick={() => setIsEditing(true)}
+                disabled={!!loadingAction || isEditing}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white w-9 h-9 p-0"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Edit Input Area */}
+        {isEditing && (
+          <div className="flex gap-2 mt-4">
+            <Input
+              value={editInstruction}
+              onChange={(e) => setEditInstruction(e.target.value)}
+              placeholder="E.g., The risk assessment is too conservative..."
+              className="flex-1 text-base"
+              onKeyDown={(e) =>
+                e.key === "Enter" && !e.shiftKey && onSubmitEdit()
+              }
+              disabled={!!loadingAction}
+            />
+            <Button
+              onClick={onSubmitEdit}
+              size="lg"
+              className="w-9 h-9"
+              disabled={!!loadingAction || !editInstruction.trim()}
+            >
+              <Send className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* 6. Footer */}
+        <div className="mt-2 pt-5 flex justify-between items-center text-xs text-gray-500">
+          {message.meta?.since_days ? (
+            <>
+              {/* Left Side: Analysis Info */}
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>
+                  Analysis based on data from the last {message.meta.since_days}{" "}
+                  days
+                </span>
+              </div>
+
+              {/* Right Side: Timestamp */}
+              <div className="shrink-0">
+                <BubbleTimestamp timestamp={message.timestamp} />
+              </div>
+            </>
+          ) : (
+            /* Fallback if since_days is missing: Push timestamp to the right */
+            <div className="ml-auto">
+              <BubbleTimestamp timestamp={message.timestamp} />
             </div>
           )}
-          <Button
-            onClick={onApprove}
-            className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-          >
-            Save Advice
-          </Button>
         </div>
       </CardContent>
     </Card>
@@ -969,6 +962,7 @@ function DefaultMessageBubble({ message }: { message: Message }) {
             )}
           </div>
         )}
+        <BubbleTimestamp timestamp={message.timestamp} />
       </CardContent>
     </Card>
   );
@@ -1050,10 +1044,11 @@ export function FinancialLookupBubble({ message }: { message: Message }) {
         {financialData?.meta?.timestamp && (
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            Data as of x
+            Data as of&nbsp;
             {new Date(financialData?.meta?.timestamp).toLocaleString()}
           </div>
         )}
+        <BubbleTimestamp timestamp={message.timestamp} />
       </CardContent>
     </Card>
   );
@@ -1166,6 +1161,7 @@ export function OverviewBubble({ message }: { message: Message }) {
                   </div>
                 </div>
               )}
+              <BubbleTimestamp timestamp={message.timestamp} />
             </CardContent>
           </Card>
         );
@@ -1177,10 +1173,17 @@ export function OverviewBubble({ message }: { message: Message }) {
 // Main component to render the appropriate bubble based on intent
 function AssistantMessageBubble({
   message,
-  onSendMessage,
+  onAdvisoryDecision,
 }: {
   message: Message;
-  onSendMessage: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onAdvisoryDecision: (
+    messageId: string,
+    action: "save" | "edit",
+    insightId: string,
+    entityName: string,
+    editInstruction: string | null,
+    adviceTimeStamp: Date,
+  ) => Promise<void>;
 }) {
   const intent = message.meta?.intent;
 
@@ -1189,7 +1192,27 @@ function AssistantMessageBubble({
       return <NewsLookupBubble message={message} />;
     case "advisory_query":
     case "hitl":
-      return <AdvisoryBubble message={message} onApprove={onSendMessage} />;
+      return (
+        <AdvisoryBubble
+          message={message}
+          onDecision={(
+            action,
+            insightId,
+            entityName,
+            editInstruction,
+            adviceTimeStamp,
+          ) =>
+            onAdvisoryDecision(
+              message.id,
+              action,
+              insightId,
+              entityName,
+              editInstruction,
+              adviceTimeStamp,
+            )
+          }
+        />
+      );
     case "overview":
       return <OverviewBubble message={message} />;
     case "financial_lookup":
@@ -1210,14 +1233,6 @@ export default function Chat() {
   } = useChat();
 
   const [inputValue, setInputValue] = useState("");
-  const [pendingApprove, setPendingApprove] = useState(false);
-
-  useEffect(() => {
-    if (pendingApprove && inputValue === "approve") {
-      handleSendMessage();
-      setPendingApprove(false);
-    }
-  }, [inputValue, pendingApprove]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -1251,6 +1266,154 @@ export default function Chat() {
 
     initSession();
   }, []);
+
+  // Handler for direct backend actions
+  const handleAdvisoryDecision = async (
+    messageId: string,
+    action: "save" | "edit",
+    insightId: string,
+    entityName: string,
+    editInstruction: string | null,
+    adviceTimeStamp: Date,
+  ) => {
+    // 1. Set Loading to disable inputs during processing
+    setIsLoading(true);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    // Optimistically update the previous bubble to show the decision was made
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) =>
+        msg.id === messageId && msg.meta
+          ? { ...msg, meta: { ...msg.meta, decision: action } }
+          : msg,
+      ),
+    );
+
+    try {
+      const formattedTime = new Date(adviceTimeStamp).toLocaleTimeString(
+        "en-US",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        },
+      );
+
+      let formattedAction = "";
+      if (action === "edit") formattedAction = "rerun";
+      else if (action == "save") formattedAction = action;
+
+      console.log(
+        JSON.stringify({
+          session_id: sessionId,
+          action: formattedAction,
+          target_insight_id: insightId,
+          edit_instruction: editInstruction,
+        }),
+      );
+
+      const response = await fetch(`${apiUrl}/advisory/decision`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          action: formattedAction,
+          target_insight_id: insightId,
+          edit_instruction: editInstruction,
+        }),
+      });
+
+      // 2. Parse the JSON once, so we can use it for both success and error blocks
+      const data = await response.json();
+
+      if (response.ok) {
+        // --- SCENARIO A: SAVE ---
+        if (formattedAction === "save") {
+          const successMessage: Message = {
+            id: Date.now().toString(),
+            content: `Saved ${formattedTime} advice on ${entityName} successfully! You can view it via the side panel, under "Client Advice History".`,
+            sender: "assistant",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, successMessage]);
+        }
+
+        // --- SCENARIO B: EDIT (RERUN) ---
+        else if (formattedAction === "rerun") {
+          // Extract data similar to handleSendMessage logic
+          const textData = data.text || {};
+          const metaData = data.meta || {};
+          console.log(metaData);
+
+          // Construct the new Assistant Message with the updated advice
+          const newAdvisoryMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content:
+              typeof textData === "string"
+                ? textData
+                : textData.text ||
+                  textData.message ||
+                  "Here is the updated advice based on your instructions.",
+            sender: "assistant",
+            timestamp: new Date(),
+            meta: {
+              intent: metaData.intent || "hitl", // Ensure intent triggers AdvisoryBubble
+              entity: metaData.entity,
+              since_days: metaData.since_days,
+              are_articles_recent: textData.meta?.are_articles_recent || false,
+              articles: textData.articles || [],
+              advice: textData.advice || null, // <--- This contains the NEW advice
+              advice_list: textData.advice_list || [],
+              financial_data: textData.financial_data || [],
+              docs: metaData.docs,
+              has_summary: metaData.has_summary,
+              needs_clarification: metaData.needs_clarification,
+              signals: metaData.signals || [],
+            },
+            analysis: {
+              intent: metaData.intent || "hitl",
+              sensitivityLevel: "N/A",
+              entities: metaData.entity ? [metaData.entity] : [],
+            },
+            sources:
+              typeof metaData.docs === "number"
+                ? [`${metaData.docs} source(s) retrieved`]
+                : Array.isArray(metaData.docs)
+                  ? metaData.docs.map((d: Doc) => d.url).filter(Boolean)
+                  : [],
+            agentUsed: "orchestrator",
+          };
+
+          // Append the new bubble to the chat
+          setMessages((prev) => [...prev, newAdvisoryMessage]);
+        }
+      } else {
+        // --- SCENARIO C: ERROR ---
+        const errorDetail = JSON.stringify(
+          data.detail || "Unknown error",
+          null,
+          2,
+        );
+        const failureMessage: Message = {
+          id: Date.now().toString(),
+          content: `Failed to process request for ${entityName}. Error: ${errorDetail}`,
+          sender: "assistant",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, failureMessage]);
+      }
+    } catch (error) {
+      console.error("Failed to send decision:", error);
+      // Optional: Add a UI error message here as well
+    } finally {
+      // 3. Ensure loading state is turned off
+      setIsLoading(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -1452,10 +1615,7 @@ export default function Chat() {
               ) : (
                 <AssistantMessageBubble
                   message={message}
-                  onSendMessage={() => {
-                    setInputValue("approve");
-                    setPendingApprove(true);
-                  }}
+                  onAdvisoryDecision={handleAdvisoryDecision}
                 />
               )}
 

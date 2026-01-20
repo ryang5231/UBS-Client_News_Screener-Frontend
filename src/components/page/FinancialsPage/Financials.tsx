@@ -155,6 +155,8 @@ const FinancialsPage: React.FC = () => {
     );
   }
 
+  // console.log(data);
+
   const history = data?.earnings_estimates?.history || [];
   const historyToShow = showFullHistory ? history : history.slice(0, 5);
 
@@ -333,16 +335,17 @@ const FinancialsPage: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
-              {data.earnings_estimates.history.length > 5 && (
-                <div className="mt-4 flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowFullHistory((prev) => !prev)}
-                  >
-                    {showFullHistory ? "Show Less" : "Show All History"}
-                  </Button>
-                </div>
-              )}
+              {data.earnings_estimates.history &&
+                data.earnings_estimates.history.length > 5 && (
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowFullHistory((prev) => !prev)}
+                    >
+                      {showFullHistory ? "Show Less" : "Show All History"}
+                    </Button>
+                  </div>
+                )}
             </CardContent>
           </Card>
         </>
